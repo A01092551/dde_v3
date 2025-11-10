@@ -98,7 +98,7 @@ export default function ExtraccionPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/extract-invoice', {
+      const response = await fetch('/api/invoices', {
         method: 'POST',
         body: formData,
       });
@@ -141,7 +141,7 @@ export default function ExtraccionPage() {
     setSuccessMessage('');
 
     try {
-      const response = await fetch('/api/validate-invoice', {
+      const response = await fetch('/api/invoices', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -158,7 +158,7 @@ export default function ExtraccionPage() {
         throw new Error(data.error || 'Error al validar la factura');
       }
 
-      setSuccessMessage(`✅ Factura validada y guardada exitosamente (ID: ${data.facturaId})`);
+      setSuccessMessage(`✅ Factura validada y guardada exitosamente (ID: ${data.id})`);
       setIsValidated(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al validar la factura');
@@ -184,12 +184,26 @@ export default function ExtraccionPage() {
               Extracción de Facturas
             </h1>
           </div>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition"
-          >
-            Cerrar Sesión
-          </button>
+          <div className="flex gap-4">
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition"
+            >
+              ← Menú Principal
+            </button>
+            <button
+              onClick={() => router.push('/facturas')}
+              className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Ver Facturas Guardadas
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:underline"
+            >
+              Cerrar Sesión
+            </button>
+          </div>
         </div>
       </header>
 

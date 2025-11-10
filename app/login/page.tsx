@@ -32,8 +32,8 @@ export default function LoginPage() {
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('userEmail', email);
       
-      // Redirigir a la página de extracción
-      router.push('/extraccion');
+      // Redirigir al dashboard
+      router.push('/dashboard');
     } catch (err) {
       setError('Error al iniciar sesión. Intenta nuevamente.');
     } finally {

@@ -70,13 +70,57 @@ Ve a [http://localhost:3000](http://localhost:3000)
 
 ## 📖 Uso
 
-1. **Iniciar sesión** en `/login` (credenciales por defecto: admin/admin)
-2. **Ir a la página de extracción** en `/extraccion`
-3. **Cargar una factura** (PDF o imagen)
-4. **Hacer clic en "Extraer Datos"**
-5. **Revisar los datos extraídos** en formato JSON
-6. **Hacer clic en "Validar y Guardar en BD"** para almacenar en MongoDB
-7. **Verificar** que la factura se guardó correctamente (mensaje de confirmación)
+### 🗺️ Flujo de Navegación
+
+```
+┌─────────────────┐
+│   Página Inicio │  http://localhost:3000
+│   (Redirección) │
+└────────┬────────┘
+         │
+         ├─── No autenticado ──→ Login (/login)
+         │                         │
+         │                         ↓
+         └─── Autenticado ────→ Dashboard (/dashboard)
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │                             │
+                    ↓                             ↓
+            Cargar Facturas              Ver Facturas Guardadas
+            (/extraccion)                   (/facturas)
+                    │                             │
+                    ↓                             │
+            1. Subir archivo                      │
+            2. Extraer datos                      │
+            3. Validar y guardar ─────────────────┘
+                    │
+                    ↓
+            MongoDB Atlas
+```
+
+### Flujo Principal
+
+1. **Acceder a la aplicación** en `http://localhost:3000`
+2. **Iniciar sesión** (credenciales por defecto: `admin` / `admin`)
+3. **Seleccionar una opción** en el menú principal:
+   - 📤 **Cargar Facturas**: Extraer datos de nuevas facturas
+   - 📋 **Ver Facturas Guardadas**: Consultar facturas en la base de datos
+
+### Cargar y Procesar Facturas
+
+1. Desde el menú principal, selecciona **"Cargar Facturas"**
+2. **Arrastra o selecciona** una factura (PDF o imagen)
+3. Haz clic en **"Extraer Datos"**
+4. **Revisa los datos extraídos** en formato JSON
+5. Haz clic en **"Validar y Guardar en BD"** para almacenar en MongoDB
+6. **Verifica** el mensaje de confirmación
+
+### Consultar Facturas
+
+1. Desde el menú principal, selecciona **"Ver Facturas Guardadas"**
+2. **Explora** todas las facturas almacenadas
+3. **Busca** por número de factura usando la barra de búsqueda
+4. **Visualiza** los detalles de cada factura
 
 ## 📁 Estructura del Proyecto
 
@@ -90,10 +134,14 @@ dde_v2/
 │   │       └── route.ts          # API endpoint para validación y guardado
 │   ├── login/
 │   │   └── page.tsx              # Página de login
+│   ├── dashboard/
+│   │   └── page.tsx              # Menú principal (después del login)
 │   ├── extraccion/
-│   │   └── page.tsx              # Página de extracción
+│   │   └── page.tsx              # Página de extracción de facturas
+│   ├── facturas/
+│   │   └── page.tsx              # Página de consulta de facturas
 │   ├── layout.tsx                # Layout principal
-│   └── page.tsx                  # Página de inicio
+│   └── page.tsx                  # Página de inicio (redirección)
 ├── lib/
 │   ├── mongodb.ts                # Configuración de MongoDB
 │   └── models/
@@ -104,6 +152,7 @@ dde_v2/
 ├── .env.local                     # Variables de entorno (no incluido)
 ├── env-template.txt               # Plantilla de variables de entorno
 ├── MONGODB_SETUP.md               # Guía de configuración de MongoDB
+├── API_EXAMPLES.md                # Ejemplos de uso de API endpoints
 └── package.json                   # Dependencias del proyecto
 ```
 

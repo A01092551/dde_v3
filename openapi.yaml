@@ -1,0 +1,675 @@
+openapi: 3.0.3
+
+info:
+  title: Sistema de Extracción de Facturas API
+  version: 2.0.0
+  description: |
+    API RESTful para extracción automática de datos de facturas usando OpenAI GPT-4o.
+    
+    **Características principales:**
+    - Extracción de datos de facturas (PDF e imágenes)
+    - Almacenamiento en MongoDB
+    - Gestión completa de facturas (CRUD)
+    - Búsqueda y paginación
+    - Validación de datos
+    - Detección de duplicados
+    
+    **Tecnologías:**
+    - Next.js 14+ con App Router
+    - OpenAI GPT-4o (Vision y Assistants API)
+    - MongoDB con Mongoose
+    - TypeScript
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Servidor de desarrollo local
+  - url: https://your-production-url.com
+    description: Servidor de producción
+
+tags:
+  - name: Invoices
+    description: Operaciones de gestión de facturas
+
+paths:
+  /api/invoices:
+    get:
+      tags:
+        - Invoices
+      summary: Listar facturas
+      description: Obtiene una lista de facturas con paginación y búsqueda opcional
+      operationId: listInvoices
+      parameters:
+        - name: limit
+          in: query
+          description: Número máximo de resultados a retornar
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+        - name: skip
+          in: query
+          description: Número de resultados a saltar (para paginación)
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: numero
+          in: query
+          description: Buscar por número de factura (búsqueda parcial)
+          required: false
+          schema:
+            type: string
+        - name: numeroFactura
+          in: query
+          description: Alias de 'numero' para compatibilidad
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de facturas obtenida exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invoice'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+                  _links:
+                    $ref: '#/components/schemas/Links'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - Invoices
+      summary: Crear/procesar factura
+      description: |
+        Endpoint dual que soporta dos operaciones:
+        1. **Extracción**: Subir archivo (PDF/imagen) para extraer datos con IA
+        2. **Guardado**: Guardar factura ya extraída en MongoDB
+        
+        El comportamiento se determina por el Content-Type:
+        - `multipart/form-data`: Extrae datos del archivo
+        - `application/json`: Guarda factura en base de datos
+      operationId: createInvoice
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Archivo PDF o imagen de la factura
+            examples:
+              pdfFile:
+                summary: Subir PDF
+                value:
+                  file: factura.pdf
+              imageFile:
+                summary: Subir imagen
+                value:
+                  file: factura.jpg
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceInput'
+            examples:
+              completeInvoice:
+                summary: Factura completa
+                value:
+                  numeroFactura: "F-001-2024"
+                  fecha: "2024-11-09"
+                  fechaVencimiento: "2024-12-09"
+                  proveedor:
+                    nombre: "Proveedor Ejemplo S.A."
+                    rfc: "PRO123456789"
+                    direccion: "Av. Principal 123, CDMX"
+                    telefono: "+52 55 1234 5678"
+                  cliente:
+                    nombre: "Cliente Demo S.A."
+                    rfc: "CLI987654321"
+                    direccion: "Calle Secundaria 456, CDMX"
+                  items:
+                    - descripcion: "Servicio de Consultoría"
+                      cantidad: 10
+                      precioUnitario: 1500.00
+                      total: 15000.00
+                  subtotal: 15000.00
+                  iva: 2400.00
+                  total: 17400.00
+                  moneda: "MXN"
+                  formaPago: "Transferencia"
+                  metodoPago: "PUE"
+                  usoCFDI: "G03"
+                  metadata:
+                    fileName: "factura.pdf"
+                    fileSize: 527253
+                    processedAt: "2024-11-09T20:30:00Z"
+                    model: "gpt-4o"
+      responses:
+        '200':
+          description: Datos extraídos exitosamente (para multipart/form-data)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '201':
+          description: Factura creada exitosamente (para application/json)
+          headers:
+            Location:
+              description: URL del recurso creado
+              schema:
+                type: string
+                example: /api/invoices/673f8a1b2c3d4e5f6a7b8c9d
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Factura creada exitosamente"
+                  id:
+                    type: string
+                    example: "673f8a1b2c3d4e5f6a7b8c9d"
+                  numeroFactura:
+                    type: string
+                    example: "F-001-2024"
+                  _links:
+                    $ref: '#/components/schemas/Links'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          description: Content-Type no soportado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/invoices/{id}:
+    get:
+      tags:
+        - Invoices
+      summary: Obtener factura por ID
+      description: Obtiene los detalles completos de una factura específica
+      operationId: getInvoiceById
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200':
+          description: Factura encontrada
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Invoice'
+                  - type: object
+                    properties:
+                      _links:
+                        $ref: '#/components/schemas/Links'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags:
+        - Invoices
+      summary: Actualizar factura completa
+      description: Reemplaza todos los datos de una factura existente
+      operationId: updateInvoice
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceInput'
+      responses:
+        '200':
+          description: Factura actualizada exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Factura actualizada exitosamente"
+                  data:
+                    $ref: '#/components/schemas/Invoice'
+                  _links:
+                    $ref: '#/components/schemas/Links'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      tags:
+        - Invoices
+      summary: Actualizar factura parcialmente
+      description: Actualiza solo los campos especificados de una factura
+      operationId: patchInvoice
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Objeto con los campos a actualizar
+              example:
+                total: 18000.00
+                observaciones: "Factura actualizada"
+      responses:
+        '200':
+          description: Factura actualizada exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Factura actualizada exitosamente"
+                  data:
+                    $ref: '#/components/schemas/Invoice'
+                  _links:
+                    $ref: '#/components/schemas/Links'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - Invoices
+      summary: Eliminar factura
+      description: Elimina permanentemente una factura de la base de datos
+      operationId: deleteInvoice
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200':
+          description: Factura eliminada exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Factura eliminada exitosamente"
+                  id:
+                    type: string
+                    example: "673f8a1b2c3d4e5f6a7b8c9d"
+                  numeroFactura:
+                    type: string
+                    example: "F-001-2024"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  parameters:
+    InvoiceId:
+      name: id
+      in: path
+      required: true
+      description: ID único de la factura (MongoDB ObjectId)
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+        example: "673f8a1b2c3d4e5f6a7b8c9d"
+
+  schemas:
+    Invoice:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: ID único de MongoDB
+          example: "673f8a1b2c3d4e5f6a7b8c9d"
+        numeroFactura:
+          type: string
+          description: Número de la factura
+          example: "F-001-2024"
+        fecha:
+          type: string
+          format: date
+          description: Fecha de emisión
+          example: "2024-11-09"
+        fechaVencimiento:
+          type: string
+          format: date
+          description: Fecha de vencimiento
+          example: "2024-12-09"
+        proveedor:
+          $ref: '#/components/schemas/Proveedor'
+        cliente:
+          $ref: '#/components/schemas/Cliente'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        subtotal:
+          type: number
+          format: double
+          description: Subtotal antes de impuestos
+          example: 15000.00
+        iva:
+          type: number
+          format: double
+          description: Monto del IVA
+          example: 2400.00
+        total:
+          type: number
+          format: double
+          description: Monto total
+          example: 17400.00
+        moneda:
+          type: string
+          description: Código de moneda
+          example: "MXN"
+        formaPago:
+          type: string
+          description: Forma de pago
+          example: "Transferencia"
+        metodoPago:
+          type: string
+          description: Método de pago
+          example: "PUE"
+        usoCFDI:
+          type: string
+          description: Uso del CFDI
+          example: "G03"
+        observaciones:
+          type: string
+          description: Notas adicionales
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        createdAt:
+          type: string
+          format: date-time
+          description: Fecha de creación
+        updatedAt:
+          type: string
+          format: date-time
+          description: Fecha de última actualización
+
+    InvoiceInput:
+      type: object
+      required:
+        - metadata
+      properties:
+        numeroFactura:
+          type: string
+        fecha:
+          type: string
+          format: date
+        fechaVencimiento:
+          type: string
+          format: date
+        proveedor:
+          $ref: '#/components/schemas/Proveedor'
+        cliente:
+          $ref: '#/components/schemas/Cliente'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        subtotal:
+          type: number
+          format: double
+        iva:
+          type: number
+          format: double
+        total:
+          type: number
+          format: double
+        moneda:
+          type: string
+        formaPago:
+          type: string
+        metodoPago:
+          type: string
+        usoCFDI:
+          type: string
+        observaciones:
+          type: string
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+
+    Proveedor:
+      type: object
+      properties:
+        nombre:
+          type: string
+          example: "Proveedor Ejemplo S.A."
+        rfc:
+          type: string
+          example: "PRO123456789"
+        nit:
+          type: string
+        direccion:
+          type: string
+          example: "Av. Principal 123, CDMX"
+        telefono:
+          type: string
+          example: "+52 55 1234 5678"
+
+    Cliente:
+      type: object
+      properties:
+        nombre:
+          type: string
+          example: "Cliente Demo S.A."
+        rfc:
+          type: string
+          example: "CLI987654321"
+        nit:
+          type: string
+        direccion:
+          type: string
+          example: "Calle Secundaria 456, CDMX"
+
+    Item:
+      type: object
+      properties:
+        descripcion:
+          type: string
+          example: "Servicio de Consultoría"
+        cantidad:
+          type: number
+          format: double
+          example: 10
+        precioUnitario:
+          type: number
+          format: double
+          example: 1500.00
+        total:
+          type: number
+          format: double
+          example: 15000.00
+
+    Metadata:
+      type: object
+      required:
+        - fileName
+        - processedAt
+      properties:
+        fileName:
+          type: string
+          description: Nombre del archivo original
+          example: "factura.pdf"
+        fileSize:
+          type: number
+          description: Tamaño del archivo en bytes
+          example: 527253
+        mimeType:
+          type: string
+          description: Tipo MIME del archivo
+          example: "application/pdf"
+        processedAt:
+          type: string
+          format: date-time
+          description: Fecha y hora de procesamiento
+          example: "2024-11-09T20:30:00Z"
+        model:
+          type: string
+          description: Modelo de IA utilizado
+          example: "gpt-4o"
+        validatedAt:
+          type: string
+          format: date-time
+          description: Fecha y hora de validación
+        validatedBy:
+          type: string
+          description: Usuario que validó
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: Número total de resultados
+          example: 100
+        limit:
+          type: integer
+          description: Límite de resultados por página
+          example: 50
+        skip:
+          type: integer
+          description: Número de resultados saltados
+          example: 0
+        hasMore:
+          type: boolean
+          description: Indica si hay más resultados
+          example: true
+
+    Links:
+      type: object
+      properties:
+        self:
+          type: string
+          description: URL del recurso actual
+          example: "/api/invoices/673f8a1b2c3d4e5f6a7b8c9d"
+        collection:
+          type: string
+          description: URL de la colección
+          example: "/api/invoices"
+        next:
+          type: string
+          nullable: true
+          description: URL de la siguiente página
+          example: "/api/invoices?limit=50&skip=50"
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Mensaje de error
+          example: "Error al procesar la solicitud"
+        message:
+          type: string
+          description: Detalles del error
+        details:
+          type: array
+          items:
+            type: string
+          description: Detalles adicionales (para errores de validación)
+
+  responses:
+    BadRequest:
+      description: Solicitud inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            invalidId:
+              summary: ID inválido
+              value:
+                error: "ID de factura inválido"
+            missingField:
+              summary: Campo requerido faltante
+              value:
+                error: "Datos incompletos"
+                message: "Se requieren metadata.fileName y metadata.processedAt"
+            validationError:
+              summary: Error de validación
+              value:
+                error: "Error de validación"
+                details:
+                  - "metadata.fileName is required"
+                  - "metadata.processedAt is required"
+
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Factura no encontrada"
+
+    Conflict:
+      description: Conflicto - Recurso duplicado
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Error'
+              - type: object
+                properties:
+                  facturaId:
+                    type: string
+          example:
+            error: "Factura duplicada"
+            message: "Ya existe una factura con el número F-001-2024"
+            facturaId: "673f8a1b2c3d4e5f6a7b8c9d"
+
+    InternalServerError:
+      description: Error interno del servidor
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Error interno del servidor"
+            message: "Detalles del error"
