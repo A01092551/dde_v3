@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import clientPromise from '@/lib/mongodb';
+import connectDB from '@/lib/mongoose';
 import Factura from '@/lib/models/Factura';
 
 const openai = new OpenAI({
@@ -10,7 +10,7 @@ const openai = new OpenAI({
 // GET /api/invoices - Listar facturas con paginación y búsqueda
 export async function GET(request: NextRequest) {
   try {
-    await clientPromise;
+    await connectDB();
 
     const searchParams = request.nextUrl.searchParams;
     const limit = parseInt(searchParams.get('limit') || '50');
@@ -264,7 +264,7 @@ Campos a extraer:
 // Función auxiliar: Guardar factura en MongoDB
 async function saveInvoice(request: NextRequest) {
   try {
-    await clientPromise;
+    await connectDB();
 
     const data = await request.json();
 

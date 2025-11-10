@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import clientPromise from '@/lib/mongodb';
+import connectDB from '@/lib/mongoose';
 import Factura from '@/lib/models/Factura';
 import mongoose from 'mongoose';
 
@@ -9,7 +9,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    await clientPromise;
+    await connectDB();
 
     const { id } = params;
 
@@ -59,7 +59,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    await clientPromise;
+    await connectDB();
 
     const { id } = params;
 
@@ -130,7 +130,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    await clientPromise;
+    await connectDB();
 
     const { id } = params;
 
@@ -201,7 +201,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await clientPromise;
+    await connectDB();
 
     const { id } = params;
 
