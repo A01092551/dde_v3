@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!env-template.txt
 
 # vercel
 .vercel
@@ -39,3 +40,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# dataset de facturas (archivos grandes)
+/facturas_dataset/
+
+# archivos de prueba
+test-openai.js
+
+# logs de npm
+*.log

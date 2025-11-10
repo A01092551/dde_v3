@@ -1,0 +1,30 @@
+# ============================================
+# INSTRUCCIONES PARA CONFIGURAR VARIABLES DE ENTORNO
+# ============================================
+#
+# 1. Copia este contenido
+# 2. Crea un archivo llamado ".env.local" en la raíz del proyecto
+# 3. Pega el contenido y reemplaza "tu-api-key-aqui" con tu API Key real
+# 4. Guarda el archivo
+# 5. Reinicia el servidor de desarrollo (npm run dev)
+#
+# ============================================
+
+OPENAI_API_KEY=tu-api-key-aqui
+
+# ============================================
+# CÓMO OBTENER TU API KEY DE OPENAI:
+# ============================================
+#
+# 1. Ve a: https://platform.openai.com/api-keys
+# 2. Inicia sesión con tu cuenta de OpenAI
+# 3. Haz clic en "Create new secret key"
+# 4. Copia la key (solo se muestra una vez)
+# 5. Pégala arriba reemplazando "tu-api-key-aqui"
+#
+# IMPORTANTE: 
+# - Nunca compartas tu API Key
+# - No la subas a repositorios públicos
+# - El archivo .env.local está en .gitignore por seguridad
+#
+# ============================================
