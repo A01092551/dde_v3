@@ -10,7 +10,36 @@
 #
 # ============================================
 
+# Variables de Entorno para el Proyecto DDE_V2
+
+# ============================================
+# OPENAI API KEY
+# ============================================
+# Esta es tu clave de API de OpenAI
+# Obtén tu API Key en: https://platform.openai.com/api-keys
+# 
+# IMPORTANTE: 
+# - Nunca compartas esta clave públicamente
+# - No la subas a GitHub o repositorios públicos
+# - Mantenla segura en tu archivo .env.local
+
 OPENAI_API_KEY=tu-api-key-aqui
+
+# ============================================
+# MONGODB CONNECTION
+# ============================================
+# Connection string de MongoDB Atlas
+# Reemplaza <db_password> con tu contraseña real de la base de datos
+# 
+# IMPORTANTE:
+# - No incluyas caracteres especiales en la contraseña sin codificar
+# - Si tu contraseña tiene caracteres especiales, usa URL encoding
+# - Ejemplo: @ = %40, # = %23, etc.
+
+MONGODB_URI=mongodb+srv://anuar2712_db_user:<db_password>@facturascluster.tb0zlhs.mongodb.net/?appName=Facturascluster
+
+# Nombre de la base de datos
+MONGODB_DB=facturas_db
 
 # ============================================
 # CÓMO OBTENER TU API KEY DE OPENAI:

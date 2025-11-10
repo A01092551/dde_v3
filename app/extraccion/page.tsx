@@ -24,9 +24,12 @@ interface FacturaData {
 export default function ExtraccionPage() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [validating, setValidating] = useState(false);
   const [result, setResult] = useState<FacturaData | null>(null);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [dragActive, setDragActive] = useState(false);
+  const [isValidated, setIsValidated] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -123,6 +126,45 @@ export default function ExtraccionPage() {
     setFile(null);
     setResult(null);
     setError('');
+    setSuccessMessage('');
+    setIsValidated(false);
+  };
+
+  const handleValidate = async () => {
+    if (!result) {
+      setError('No hay datos para validar');
+      return;
+    }
+
+    setValidating(true);
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      const response = await fetch('/api/validate-invoice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(result),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          throw new Error('Esta factura ya ha sido validada anteriormente');
+        }
+        throw new Error(data.error || 'Error al validar la factura');
+      }
+
+      setSuccessMessage(`✅ Factura validada y guardada exitosamente (ID: ${data.facturaId})`);
+      setIsValidated(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al validar la factura');
+    } finally {
+      setValidating(false);
+    }
   };
 
   return (
@@ -247,6 +289,13 @@ export default function ExtraccionPage() {
                 </div>
               )}
 
+              {/* Success Message */}
+              {successMessage && (
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 px-4 py-3 rounded-lg text-sm">
+                  {successMessage}
+                </div>
+              )}
+
               {/* Submit Button */}
               <button
                 type="submit"
@@ -265,6 +314,43 @@ export default function ExtraccionPage() {
                   'Extraer Datos'
                 )}
               </button>
+
+              {/* Validate Button */}
+              {result && !isValidated && (
+                <button
+                  type="button"
+                  onClick={handleValidate}
+                  disabled={validating}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-zinc-400 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors duration-200 flex items-center justify-center"
+                >
+                  {validating ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Validando...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Validar y Guardar en BD
+                    </>
+                  )}
+                </button>
+              )}
+
+              {/* Validated Badge */}
+              {isValidated && (
+                <div className="flex items-center justify-center gap-2 text-green-600 dark:text-green-400 font-semibold">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Factura validada y guardada
+                </div>
+              )}
             </form>
           </div>
 

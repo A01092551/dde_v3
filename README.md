@@ -7,6 +7,8 @@ Aplicación web desarrollada con Next.js 16 y OpenAI GPT-4o para extraer automá
 - ✅ **Extracción automática de datos** de facturas usando OpenAI GPT-4o
 - 📄 **Soporte para PDFs** (usando Assistants API)
 - 🖼️ **Soporte para imágenes** (PNG, JPG, JPEG, WEBP) usando Vision API
+- 🗄️ **Validación y almacenamiento** en MongoDB Atlas
+- 🔍 **Detección de duplicados** por número de factura
 - 🔐 **Sistema de autenticación** simple
 - 📊 **Visualización de datos** extraídos en formato JSON
 - 🎨 **Interfaz moderna** con TailwindCSS y modo oscuro
@@ -16,6 +18,7 @@ Aplicación web desarrollada con Next.js 16 y OpenAI GPT-4o para extraer automá
 
 - **Frontend**: Next.js 16, React 19, TypeScript 5, TailwindCSS
 - **IA**: OpenAI GPT-4o (Vision API + Assistants API)
+- **Base de Datos**: MongoDB Atlas con Mongoose
 - **Gestión de Estado**: React Hooks
 - **Estilos**: TailwindCSS con modo oscuro
 
@@ -24,6 +27,7 @@ Aplicación web desarrollada con Next.js 16 y OpenAI GPT-4o para extraer automá
 - Node.js 18 o superior
 - npm o yarn
 - API Key de OpenAI con acceso a GPT-4o
+- Cuenta de MongoDB Atlas (gratuita)
 
 ## 🔧 Instalación
 
@@ -43,10 +47,17 @@ npm install
 Crea un archivo `.env.local` en la raíz del proyecto:
 
 ```env
+# OpenAI API Key
 OPENAI_API_KEY=tu-api-key-aqui
+
+# MongoDB Connection
+MONGODB_URI=mongodb+srv://usuario:<password>@cluster.mongodb.net/?appName=MyApp
+MONGODB_DB=facturas_db
 ```
 
-> 💡 Puedes obtener tu API Key en: https://platform.openai.com/api-keys
+> 💡 **OpenAI**: Obtén tu API Key en https://platform.openai.com/api-keys
+> 
+> 💡 **MongoDB**: Obtén tu connection string en MongoDB Atlas. Ver [MONGODB_SETUP.md](./MONGODB_SETUP.md) para más detalles.
 
 4. **Ejecutar el servidor de desarrollo**
 ```bash
@@ -63,7 +74,9 @@ Ve a [http://localhost:3000](http://localhost:3000)
 2. **Ir a la página de extracción** en `/extraccion`
 3. **Cargar una factura** (PDF o imagen)
 4. **Hacer clic en "Extraer Datos"**
-5. **Ver los resultados** en formato JSON estructurado
+5. **Revisar los datos extraídos** en formato JSON
+6. **Hacer clic en "Validar y Guardar en BD"** para almacenar en MongoDB
+7. **Verificar** que la factura se guardó correctamente (mensaje de confirmación)
 
 ## 📁 Estructura del Proyecto
 
@@ -71,19 +84,26 @@ Ve a [http://localhost:3000](http://localhost:3000)
 dde_v2/
 ├── app/
 │   ├── api/
-│   │   └── extract-invoice/
-│   │       └── route.ts          # API endpoint para extracción
+│   │   ├── extract-invoice/
+│   │   │   └── route.ts          # API endpoint para extracción
+│   │   └── validate-invoice/
+│   │       └── route.ts          # API endpoint para validación y guardado
 │   ├── login/
 │   │   └── page.tsx              # Página de login
 │   ├── extraccion/
 │   │   └── page.tsx              # Página de extracción
 │   ├── layout.tsx                # Layout principal
 │   └── page.tsx                  # Página de inicio
+├── lib/
+│   ├── mongodb.ts                # Configuración de MongoDB
+│   └── models/
+│       └── Factura.ts            # Modelo de Mongoose para facturas
 ├── notebooks/
 │   └── descargar_facturas.ipynb  # Notebook para descargar dataset
 ├── public/                        # Archivos estáticos
 ├── .env.local                     # Variables de entorno (no incluido)
 ├── env-template.txt               # Plantilla de variables de entorno
+├── MONGODB_SETUP.md               # Guía de configuración de MongoDB
 └── package.json                   # Dependencias del proyecto
 ```
 
