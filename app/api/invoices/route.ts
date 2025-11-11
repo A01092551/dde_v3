@@ -60,26 +60,45 @@ export async function GET(request: NextRequest) {
 
 // POST /api/invoices - Crear/procesar nueva factura
 export async function POST(request: NextRequest) {
+  const requestStartTime = Date.now();
+  
   try {
+    console.log('\n═══════════════════════════════════════════════════════');
+    console.log('📄 [BACKEND] INVOICE API ENDPOINT CALLED');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('⏰ Request received at:', new Date().toISOString());
+    console.log('🌐 Request method:', request.method);
+    console.log('🔗 Request URL:', request.url);
+    
     const contentType = request.headers.get('content-type') || '';
+    console.log('📋 Content-Type:', contentType);
 
     // Caso 1: Subir archivo para extracción (multipart/form-data)
     if (contentType.includes('multipart/form-data')) {
+      console.log('→ Route: File extraction (multipart/form-data)');
       return await extractInvoice(request);
     }
 
     // Caso 2: Guardar factura ya extraída (application/json)
     if (contentType.includes('application/json')) {
+      console.log('→ Route: Save invoice (application/json)');
       return await saveInvoice(request);
     }
 
+    console.log('❌ [BACKEND] Unsupported Content-Type');
     return NextResponse.json(
       { error: 'Content-Type no soportado. Use multipart/form-data o application/json' },
       { status: 415 } // Unsupported Media Type
     );
 
   } catch (error: any) {
-    console.error('Error en POST /api/invoices:', error);
+    const requestDuration = Date.now() - requestStartTime;
+    console.log('\n═══════════════════════════════════════════════════════');
+    console.error('❌ [BACKEND] INVOICE API FAILED WITH EXCEPTION');
+    console.log('═══════════════════════════════════════════════════════');
+    console.error('💥 Error details:', error);
+    console.error('   → Error message:', error.message);
+    console.error('   → Request duration:', requestDuration, 'ms');
     return NextResponse.json(
       { 
         error: 'Error al procesar la solicitud',
@@ -92,16 +111,25 @@ export async function POST(request: NextRequest) {
 
 // Función auxiliar: Extraer datos de factura
 async function extractInvoice(request: NextRequest) {
+  const extractionStartTime = Date.now();
+  
   try {
+    console.log('\n📦 [BACKEND] Parsing FormData...');
     const formData = await request.formData();
     const file = formData.get('file') as File;
 
     if (!file) {
+      console.log('❌ [BACKEND] No file provided in request');
       return NextResponse.json(
         { error: 'No se proporcionó ningún archivo' },
         { status: 400 }
       );
     }
+
+    console.log('✅ [BACKEND] File received:');
+    console.log('   → Name:', file.name);
+    console.log('   → Type:', file.type);
+    console.log('   → Size:', (file.size / 1024).toFixed(2), 'KB');
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
@@ -112,12 +140,17 @@ async function extractInvoice(request: NextRequest) {
 
     // Procesar según tipo de archivo
     if (mimeType === 'application/pdf') {
+      console.log('\n📄 [BACKEND] Processing PDF with OpenAI Assistants API...');
+      console.log('   → Uploading file to OpenAI...');
+      
       // Usar Assistants API para PDFs
       const uploadedFile = await openai.files.create({
         file: new File([buffer], fileName, { type: mimeType }),
         purpose: 'assistants',
       });
+      console.log('   ✅ File uploaded to OpenAI:', uploadedFile.id);
 
+      console.log('   → Creating OpenAI Assistant...');
       const assistant = await openai.beta.assistants.create({
         name: 'Invoice Extractor',
         instructions: `Eres un experto en extracción de datos de facturas. Extrae TODOS los campos posibles de la factura y devuélvelos en formato JSON estructurado.
@@ -140,7 +173,9 @@ Campos a extraer:
         model: 'gpt-4o',
         tools: [{ type: 'file_search' }],
       });
+      console.log('   ✅ Assistant created:', assistant.id);
 
+      console.log('   → Creating thread and sending message...');
       const thread = await openai.beta.threads.create({
         messages: [
           {
@@ -153,34 +188,90 @@ Campos a extraer:
         ],
       });
 
+      console.log('   ✅ Thread created:', thread.id);
+      
+      console.log('   → Running assistant (this may take a while)...');
+      const runStartTime = Date.now();
       const run = await openai.beta.threads.runs.createAndPoll(thread.id, {
         assistant_id: assistant.id,
       });
+      const runDuration = Date.now() - runStartTime;
+      
+      console.log('   ✅ Run completed in', runDuration, 'ms');
+      console.log('   → Run status:', run.status);
 
       if (run.status === 'completed') {
+        console.log('   → Extracting response from messages...');
         const messages = await openai.beta.threads.messages.list(thread.id);
         const lastMessage = messages.data[0];
         
         if (lastMessage.content[0].type === 'text') {
           const responseText = lastMessage.content[0].text.value;
-          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+          console.log('   → Raw response length:', responseText.length, 'characters');
           
-          if (jsonMatch) {
-            extractedData = JSON.parse(jsonMatch[0]);
+          // Try to find JSON in code blocks first (```json ... ```)
+          let jsonMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+          let jsonString = jsonMatch ? jsonMatch[1] : null;
+          
+          // If not found in code blocks, try to find raw JSON
+          if (!jsonString) {
+            jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            jsonString = jsonMatch ? jsonMatch[0] : null;
+          }
+          
+          if (jsonString) {
+            console.log('   → JSON found, attempting to parse...');
+            console.log('   → JSON preview:', jsonString.substring(0, 200) + '...');
+            
+            try {
+              extractedData = JSON.parse(jsonString);
+              console.log('   ✅ JSON data extracted successfully');
+            } catch (parseError: any) {
+              console.log('   ❌ JSON parse error:', parseError.message);
+              console.log('   → Attempting to clean and retry...');
+              
+              // Try to clean common issues
+              let cleanedJson = jsonString
+                .replace(/,(\s*[}\]])/g, '$1') // Remove trailing commas
+                .replace(/\n/g, ' ') // Remove newlines
+                .replace(/\r/g, '') // Remove carriage returns
+                .replace(/\t/g, ' ') // Replace tabs with spaces
+                .replace(/\s+/g, ' '); // Normalize whitespace
+              
+              try {
+                extractedData = JSON.parse(cleanedJson);
+                console.log('   ✅ JSON parsed after cleaning');
+              } catch (secondError: any) {
+                console.log('   ❌ Still failed after cleaning:', secondError.message);
+                console.log('   → Full response text:', responseText);
+                throw new Error(`No se pudo parsear el JSON: ${secondError.message}`);
+              }
+            }
           } else {
+            console.log('   ❌ Could not find JSON in response');
+            console.log('   → Full response text:', responseText);
             throw new Error('No se pudo extraer JSON de la respuesta');
           }
         }
+      } else {
+        console.log('   ❌ Run did not complete successfully:', run.status);
+        throw new Error(`OpenAI run failed with status: ${run.status}`);
       }
 
       // Limpiar recursos
+      console.log('   → Cleaning up OpenAI resources...');
       await openai.files.del(uploadedFile.id);
       await openai.beta.assistants.del(assistant.id);
+      console.log('   ✅ Resources cleaned up');
 
     } else if (mimeType.startsWith('image/')) {
-      // Usar Vision API para imágenes
+      console.log('\n🖼️  [BACKEND] Processing IMAGE with OpenAI Vision API...');
+      console.log('   → Converting image to base64...');
       const base64Image = buffer.toString('base64');
+      console.log('   ✅ Image converted (', (base64Image.length / 1024).toFixed(2), 'KB base64)');
 
+      console.log('   → Sending request to OpenAI Vision API...');
+      const visionStartTime = Date.now();
       const response = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [
@@ -218,22 +309,74 @@ Campos a extraer:
         ],
         max_tokens: 2000,
       });
+      const visionDuration = Date.now() - visionStartTime;
+      
+      console.log('   ✅ Vision API response received in', visionDuration, 'ms');
+      console.log('   → Tokens used:', response.usage?.total_tokens || 'N/A');
 
       const responseText = response.choices[0].message.content || '';
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      console.log('   → Raw response length:', responseText.length, 'characters');
+      console.log('   → Extracting JSON from response...');
       
-      if (jsonMatch) {
-        extractedData = JSON.parse(jsonMatch[0]);
+      // Try to find JSON in code blocks first (```json ... ```)
+      let jsonMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      let jsonString = jsonMatch ? jsonMatch[1] : null;
+      
+      // If not found in code blocks, try to find raw JSON
+      if (!jsonString) {
+        jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        jsonString = jsonMatch ? jsonMatch[0] : null;
+      }
+      
+      if (jsonString) {
+        console.log('   → JSON found, attempting to parse...');
+        console.log('   → JSON preview:', jsonString.substring(0, 200) + '...');
+        
+        try {
+          extractedData = JSON.parse(jsonString);
+          console.log('   ✅ JSON data extracted successfully');
+        } catch (parseError: any) {
+          console.log('   ❌ JSON parse error:', parseError.message);
+          console.log('   → Attempting to clean and retry...');
+          
+          // Try to clean common issues
+          let cleanedJson = jsonString
+            .replace(/,(\s*[}\]])/g, '$1') // Remove trailing commas
+            .replace(/\n/g, ' ') // Remove newlines
+            .replace(/\r/g, '') // Remove carriage returns
+            .replace(/\t/g, ' ') // Replace tabs with spaces
+            .replace(/\s+/g, ' '); // Normalize whitespace
+          
+          try {
+            extractedData = JSON.parse(cleanedJson);
+            console.log('   ✅ JSON parsed after cleaning');
+          } catch (secondError: any) {
+            console.log('   ❌ Still failed after cleaning:', secondError.message);
+            console.log('   → Full response text:', responseText);
+            throw new Error(`No se pudo parsear el JSON: ${secondError.message}`);
+          }
+        }
       } else {
+        console.log('   ❌ Could not find JSON in response');
+        console.log('   → Full response text:', responseText);
         throw new Error('No se pudo extraer JSON de la respuesta');
       }
 
     } else {
+      console.log('\n❌ [BACKEND] Unsupported file type:', mimeType);
       return NextResponse.json(
         { error: 'Tipo de archivo no soportado. Use PDF o imagen.' },
         { status: 400 }
       );
     }
+
+    const extractionDuration = Date.now() - extractionStartTime;
+    console.log('\n📊 [BACKEND] Extraction summary:');
+    console.log('   → Invoice number:', extractedData.numeroFactura || 'N/A');
+    console.log('   → Date:', extractedData.fecha || 'N/A');
+    console.log('   → Total:', extractedData.total || 'N/A');
+    console.log('   → Items:', extractedData.items?.length || 0);
+    console.log('   → Total extraction time:', extractionDuration, 'ms');
 
     // Agregar metadata
     const result = {
@@ -247,10 +390,23 @@ Campos a extraer:
       },
     };
 
+    console.log('\n📤 [BACKEND] Sending extraction response...');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('✅ [BACKEND] EXTRACTION COMPLETED SUCCESSFULLY');
+    console.log('═══════════════════════════════════════════════════════\n');
     return NextResponse.json(result, { status: 200 });
 
   } catch (error: any) {
-    console.error('Error al extraer factura:', error);
+    const extractionDuration = Date.now() - extractionStartTime;
+    console.log('\n═══════════════════════════════════════════════════════');
+    console.error('❌ [BACKEND] EXTRACTION FAILED');
+    console.log('═══════════════════════════════════════════════════════');
+    console.error('💥 Error details:', error);
+    console.error('   → Error message:', error.message);
+    console.error('   → Extraction duration before failure:', extractionDuration, 'ms');
+    if (error.stack) {
+      console.error('   → Stack trace:', error.stack);
+    }
     return NextResponse.json(
       { 
         error: 'Error al extraer datos de la factura',

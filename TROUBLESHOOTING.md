@@ -1,4 +1,30 @@
-# 🔧 Troubleshooting - No se ven las facturas
+# 🔧 Troubleshooting Guide
+
+## 📋 Common Issues
+
+### Issue 1: PDF Extraction JSON Parse Error ⚠️ **FIXED**
+
+**Problem:**
+```
+SyntaxError: Expected ',' or ']' after array element in JSON at position 597
+```
+
+**Cause:** OpenAI's response sometimes contains malformed JSON with trailing commas or formatting issues.
+
+**Solution:** ✅ **Already implemented** - The code now:
+1. Tries to extract JSON from code blocks first (```json ... ```)
+2. Falls back to raw JSON extraction
+3. Automatically cleans common JSON issues:
+   - Removes trailing commas
+   - Normalizes whitespace
+   - Handles newlines and tabs
+4. Provides detailed error logging
+
+**What to do:** Just retry the PDF upload. The improved parser should handle it now.
+
+---
+
+### Issue 2: No Facturas Visible
 
 ## 🐛 Problema Identificado
 

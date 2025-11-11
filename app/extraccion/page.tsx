@@ -85,31 +85,85 @@ export default function ExtraccionPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('\n═══════════════════════════════════════════════════════');
+    console.log('📄 [FRONTEND] INVOICE EXTRACTION PROCESS STARTED');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('⏰ Timestamp:', new Date().toISOString());
+    
     if (!file) {
+      console.log('❌ [FRONTEND] Validation failed: No file selected');
       setError('Por favor, selecciona un archivo (PDF o imagen)');
       return;
     }
+
+    console.log('📎 File selected:');
+    console.log('   → Name:', file.name);
+    console.log('   → Type:', file.type);
+    console.log('   → Size:', (file.size / 1024).toFixed(2), 'KB');
+    console.log('   → Last modified:', new Date(file.lastModified).toISOString());
 
     setLoading(true);
     setError('');
     setResult(null);
 
     try {
+      console.log('\n📦 [FRONTEND] Preparing FormData...');
       const formData = new FormData();
       formData.append('file', file);
+      console.log('✅ [FRONTEND] FormData created with file');
+
+      console.log('\n📤 [FRONTEND] Sending extraction request...');
+      console.log('   → Endpoint: POST /api/invoices');
+      console.log('   → Content-Type: multipart/form-data');
+      console.log('   → File size:', file.size, 'bytes');
+      
+      const requestStartTime = performance.now();
 
       const response = await fetch('/api/invoices', {
         method: 'POST',
         body: formData,
       });
 
+      const requestEndTime = performance.now();
+      const requestDuration = (requestEndTime - requestStartTime).toFixed(2);
+
+      console.log('\n📥 [FRONTEND] Response received from backend');
+      console.log('   → Status:', response.status, response.statusText);
+      console.log('   → Duration:', requestDuration, 'ms');
+      console.log('   → Content-Type:', response.headers.get('content-type'));
+
       if (!response.ok) {
+        console.log('❌ [FRONTEND] Extraction failed');
+        console.log('   → Status code:', response.status);
         throw new Error('Error al procesar la factura');
       }
 
+      console.log('\n📋 [FRONTEND] Parsing response data...');
       const data = await response.json();
+      console.log('✅ [FRONTEND] Response parsed successfully');
+      console.log('\n📊 [FRONTEND] Extracted data summary:');
+      console.log('   → Invoice number:', data.numeroFactura || 'N/A');
+      console.log('   → Date:', data.fecha || 'N/A');
+      console.log('   → Total:', data.total || 'N/A');
+      console.log('   → Items count:', data.items?.length || 0);
+      console.log('   → Metadata:', data.metadata);
+      console.log('\n📄 [FRONTEND] Full extracted data:', data);
+      
       setResult(data);
+      
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('✅ [FRONTEND] EXTRACTION COMPLETED SUCCESSFULLY');
+      console.log('═══════════════════════════════════════════════════════\n');
     } catch (err) {
+      console.log('\n═══════════════════════════════════════════════════════');
+      console.error('❌ [FRONTEND] EXTRACTION FAILED WITH ERROR');
+      console.log('═══════════════════════════════════════════════════════');
+      console.error('💥 Error details:', err);
+      console.error('   → Error type:', err instanceof Error ? err.constructor.name : typeof err);
+      console.error('   → Error message:', err instanceof Error ? err.message : String(err));
+      if (err instanceof Error && err.stack) {
+        console.error('   → Stack trace:', err.stack);
+      }
       setError(err instanceof Error ? err.message : 'Error al procesar el archivo');
     } finally {
       setLoading(false);
@@ -131,43 +185,92 @@ export default function ExtraccionPage() {
   };
 
   const handleValidate = async () => {
+    console.log('\n═══════════════════════════════════════════════════════');
+    console.log('✅ [FRONTEND] VALIDATION & SAVE PROCESS STARTED');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('⏰ Timestamp:', new Date().toISOString());
+    
     if (!result) {
+      console.log('❌ [FRONTEND] Validation failed: No extracted data');
       setError('No hay datos para validar');
       return;
     }
 
     if (!file) {
+      console.log('❌ [FRONTEND] Validation failed: No file available');
       setError('No hay archivo para subir');
       return;
     }
+
+    console.log('📋 [FRONTEND] Data to validate:');
+    console.log('   → Invoice number:', result.numeroFactura);
+    console.log('   → File name:', file.name);
+    console.log('   → File size:', file.size, 'bytes');
 
     setValidating(true);
     setError('');
     setSuccessMessage('');
 
     try {
+      console.log('\n📦 [FRONTEND] Preparing validation request...');
       // Create FormData to send both the file and the extracted data
       const formData = new FormData();
       formData.append('file', file);
       formData.append('data', JSON.stringify(result));
+      console.log('✅ [FRONTEND] FormData prepared with file and extracted data');
+
+      console.log('\n📤 [FRONTEND] Sending validation request...');
+      console.log('   → Endpoint: POST /api/invoices/validate');
+      console.log('   → Content-Type: multipart/form-data');
+      console.log('   → File:', file.name);
+      console.log('   → Data size:', JSON.stringify(result).length, 'characters');
+      
+      const requestStartTime = performance.now();
 
       const response = await fetch('/api/invoices/validate', {
         method: 'POST',
         body: formData,
       });
 
+      const requestEndTime = performance.now();
+      const requestDuration = (requestEndTime - requestStartTime).toFixed(2);
+
+      console.log('\n📥 [FRONTEND] Response received from backend');
+      console.log('   → Status:', response.status, response.statusText);
+      console.log('   → Duration:', requestDuration, 'ms');
+
       const data = await response.json();
+      console.log('📋 [FRONTEND] Response data:', data);
 
       if (!response.ok) {
+        console.log('❌ [FRONTEND] Validation failed');
+        console.log('   → Status code:', response.status);
         if (response.status === 409) {
+          console.log('   → Reason: Duplicate invoice detected');
           throw new Error('Esta factura ya ha sido validada anteriormente');
         }
+        console.log('   → Error:', data.error);
         throw new Error(data.error || 'Error al validar la factura');
       }
 
+      console.log('✅ [FRONTEND] Validation successful!');
+      console.log('   → Invoice ID:', data.id);
+      console.log('   → Invoice number:', data.numeroFactura);
+      console.log('   → S3 URL:', data.s3Url);
+      
       setSuccessMessage(`✅ Factura validada y guardada exitosamente (ID: ${data.id})`);
       setIsValidated(true);
+      
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('✅ [FRONTEND] VALIDATION & SAVE COMPLETED SUCCESSFULLY');
+      console.log('═══════════════════════════════════════════════════════\n');
     } catch (err) {
+      console.log('\n═══════════════════════════════════════════════════════');
+      console.error('❌ [FRONTEND] VALIDATION FAILED WITH ERROR');
+      console.log('═══════════════════════════════════════════════════════');
+      console.error('💥 Error details:', err);
+      console.error('   → Error type:', err instanceof Error ? err.constructor.name : typeof err);
+      console.error('   → Error message:', err instanceof Error ? err.message : String(err));
       setError(err instanceof Error ? err.message : 'Error al validar la factura');
     } finally {
       setValidating(false);

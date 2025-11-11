@@ -16,14 +16,31 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🔐 [FRONTEND] LOGIN PROCESS STARTED');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('📧 Email entered:', email);
+    console.log('🔒 Password length:', password.length, 'characters');
+    console.log('⏰ Timestamp:', new Date().toISOString());
+
     // Validación básica
     if (!email || !password) {
+      console.log('❌ [FRONTEND] Validation failed: Empty fields');
       setError('Please fill in all fields');
       setLoading(false);
       return;
     }
 
+    console.log('✅ [FRONTEND] Client-side validation passed');
+
     try {
+      console.log('📤 [FRONTEND] Preparing API request...');
+      console.log('   → Endpoint: POST /api/login');
+      console.log('   → Content-Type: application/json');
+      console.log('   → Payload:', { email, password: '***hidden***' });
+      
+      const requestStartTime = performance.now();
+      
       // Call login API
       const response = await fetch('/api/login', {
         method: 'POST',
@@ -36,25 +53,58 @@ export default function LoginPage() {
         }),
       });
 
+      const requestEndTime = performance.now();
+      const requestDuration = (requestEndTime - requestStartTime).toFixed(2);
+
+      console.log('📥 [FRONTEND] Response received from backend');
+      console.log('   → Status:', response.status, response.statusText);
+      console.log('   → Duration:', requestDuration, 'ms');
+      console.log('   → Headers:', Object.fromEntries(response.headers.entries()));
+
       const data = await response.json();
+      console.log('📋 [FRONTEND] Response data parsed:', data);
 
       if (!response.ok) {
+        console.log('❌ [FRONTEND] Login failed');
+        console.log('   → Error:', data.error);
+        console.log('   → Status code:', response.status);
         setError(data.error || 'Login failed');
         setLoading(false);
         return;
       }
 
+      console.log('✅ [FRONTEND] Login successful!');
+      console.log('👤 User data received:');
+      console.log('   → ID:', data.user.id);
+      console.log('   → Name:', data.user.name);
+      console.log('   → Email:', data.user.email);
+      console.log('   → Role:', data.user.role);
+
       // Save session
+      console.log('💾 [FRONTEND] Saving session to localStorage...');
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('userEmail', data.user.email);
       localStorage.setItem('userName', data.user.name);
       localStorage.setItem('userId', data.user.id.toString());
       localStorage.setItem('userRole', data.user.role);
+      console.log('✅ [FRONTEND] Session saved successfully');
       
       // Redirect to dashboard
+      console.log('🚀 [FRONTEND] Redirecting to dashboard...');
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('✅ [FRONTEND] LOGIN PROCESS COMPLETED SUCCESSFULLY');
+      console.log('═══════════════════════════════════════════════════════');
       router.push('/dashboard');
     } catch (err) {
-      console.error('Login error:', err);
+      console.log('═══════════════════════════════════════════════════════');
+      console.error('❌ [FRONTEND] LOGIN PROCESS FAILED WITH EXCEPTION');
+      console.log('═══════════════════════════════════════════════════════');
+      console.error('💥 Exception details:', err);
+      console.error('   → Error type:', err instanceof Error ? err.constructor.name : typeof err);
+      console.error('   → Error message:', err instanceof Error ? err.message : String(err));
+      if (err instanceof Error && err.stack) {
+        console.error('   → Stack trace:', err.stack);
+      }
       setError('An error occurred. Please try again.');
       setLoading(false);
     }
