@@ -56,7 +56,9 @@ const FacturaSchema = new mongoose.Schema({
     processedAt: { type: Date, required: true },
     model: { type: String },
     validatedAt: { type: Date, default: Date.now },
-    validatedBy: { type: String }
+    validatedBy: { type: String },
+    s3Url: { type: String }, // URL to the file in S3
+    s3Key: { type: String }  // S3 object key
   },
   
   // Datos raw (opcional, para debugging)

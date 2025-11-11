@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
-export default function LoginPage() {
+export default function SignupPage() {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -16,45 +18,57 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    // Validación básica
-    if (!email || !password) {
+    // Client-side validation
+    if (!name || !email || !password || !confirmPassword) {
       setError('Please fill in all fields');
       setLoading(false);
       return;
     }
 
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      setLoading(false);
+      return;
+    }
+
     try {
-      // Call login API
-      const response = await fetch('/api/login', {
+      // Call signup API
+      const response = await fetch('/api/signup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          name,
           email,
           password,
+          confirmPassword,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || 'Login failed');
+        setError(data.error || 'Failed to create account');
         setLoading(false);
         return;
       }
 
-      // Save session
+      // Success - save session and redirect
       localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('userEmail', data.user.email);
-      localStorage.setItem('userName', data.user.name);
-      localStorage.setItem('userId', data.user.id.toString());
-      localStorage.setItem('userRole', data.user.role);
-      
+      localStorage.setItem('userEmail', email);
+      localStorage.setItem('userName', name);
+
       // Redirect to dashboard
       router.push('/dashboard');
     } catch (err) {
-      console.error('Login error:', err);
+      console.error('Signup error:', err);
       setError('An error occurred. Please try again.');
       setLoading(false);
     }
@@ -76,16 +90,35 @@ export default function LoginPage() {
             />
           </div>
 
-          {/* Título */}
+          {/* Title */}
           <h1 className="text-3xl font-bold text-center text-zinc-900 dark:text-white mb-2">
-            Log In
+            Sign Up
           </h1>
           <p className="text-center text-zinc-600 dark:text-zinc-400 mb-8">
-            Welcome back to FacturaAI
+            Create your FacturaAI account
           </p>
 
-          {/* Formulario */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Name */}
+            <div>
+              <label 
+                htmlFor="name" 
+                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
+              >
+                Full Name
+              </label>
+              <input
+                id="name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                placeholder="John Doe"
+                disabled={loading}
+              />
+            </div>
+
             {/* Email */}
             <div>
               <label 
@@ -124,6 +157,25 @@ export default function LoginPage() {
               />
             </div>
 
+            {/* Confirm Password */}
+            <div>
+              <label 
+                htmlFor="confirmPassword" 
+                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
+              >
+                Confirm Password
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                placeholder="••••••••"
+                disabled={loading}
+              />
+            </div>
+
             {/* Error Message */}
             {error && (
               <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
@@ -143,22 +195,22 @@ export default function LoginPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Logging in...
+                  Creating account...
                 </>
               ) : (
-                'Log In'
+                'Create Account'
               )}
             </button>
           </form>
 
           {/* Footer */}
           <div className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
-            Don't have an account?{' '}
+            Already have an account?{' '}
             <button
-              onClick={() => router.push('/signup')}
+              onClick={() => router.push('/login')}
               className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
             >
-              Sign Up
+              Log In
             </button>
           </div>
           

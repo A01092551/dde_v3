@@ -136,17 +136,24 @@ export default function ExtraccionPage() {
       return;
     }
 
+    if (!file) {
+      setError('No hay archivo para subir');
+      return;
+    }
+
     setValidating(true);
     setError('');
     setSuccessMessage('');
 
     try {
-      const response = await fetch('/api/invoices', {
+      // Create FormData to send both the file and the extracted data
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('data', JSON.stringify(result));
+
+      const response = await fetch('/api/invoices/validate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(result),
+        body: formData,
       });
 
       const data = await response.json();
