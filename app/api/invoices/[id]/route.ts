@@ -6,12 +6,12 @@ import mongoose from 'mongoose';
 // GET /api/invoices/:id - Obtener una factura específica
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
 
-    const { id } = params;
+    const { id } = await params;
 
     // Validar formato de ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -56,12 +56,12 @@ export async function GET(
 // PUT /api/invoices/:id - Actualizar una factura completa
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
 
-    const { id } = params;
+    const { id } = await params;
 
     // Validar formato de ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -89,17 +89,8 @@ export async function PUT(
       );
     }
 
-    return NextResponse.json(
-      {
-        message: 'Factura actualizada exitosamente',
-        data: factura,
-        _links: {
-          self: `/api/invoices/${id}`,
-          collection: '/api/invoices',
-        },
-      },
-      { status: 200 }
-    );
+    // Return the updated factura directly (not wrapped)
+    return NextResponse.json(factura, { status: 200 });
 
   } catch (error: any) {
     console.error('Error al actualizar factura:', error);
@@ -127,12 +118,12 @@ export async function PUT(
 // PATCH /api/invoices/:id - Actualizar parcialmente una factura
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
 
-    const { id } = params;
+    const { id } = await params;
 
     // Validar formato de ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -198,12 +189,12 @@ export async function PATCH(
 // DELETE /api/invoices/:id - Eliminar una factura
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
 
-    const { id } = params;
+    const { id } = await params;
 
     // Validar formato de ID
     if (!mongoose.Types.ObjectId.isValid(id)) {

@@ -33,8 +33,7 @@ export async function uploadToS3({
       Key: key,
       Body: file,
       ContentType: mimeType,
-      // Make file publicly readable (optional, remove if you want private files)
-      // ACL: 'public-read',
+      // Note: ACL removed - bucket uses bucket policy for public access
     });
 
     await s3Client.send(command);

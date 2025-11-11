@@ -42,6 +42,22 @@ MONGODB_URI=mongodb+srv://anuar2712_db_user:<db_password>@facturascluster.tb0zlh
 MONGODB_DB=facturas_db
 
 # ============================================
+# AWS S3 CONFIGURATION
+# ============================================
+# Credenciales para subir archivos a Amazon S3
+# Obtén estas credenciales en: https://console.aws.amazon.com/iam/
+# 
+# IMPORTANTE:
+# - Crea un usuario IAM con permisos de S3
+# - Genera Access Keys para ese usuario
+# - Nunca compartas estas credenciales
+
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=tu-access-key-aqui
+AWS_SECRET_ACCESS_KEY=tu-secret-key-aqui
+AWS_S3_BUCKET_NAME=tu-bucket-name-aqui
+
+# ============================================
 # CÓMO OBTENER TU API KEY DE OPENAI:
 # ============================================
 #
