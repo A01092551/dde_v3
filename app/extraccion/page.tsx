@@ -23,6 +23,7 @@ interface FacturaData {
 
 export default function ExtraccionPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [validating, setValidating] = useState(false);
   const [result, setResult] = useState<FacturaData | null>(null);
@@ -39,6 +40,15 @@ export default function ExtraccionPage() {
       router.push('/login');
     }
   }, [router]);
+
+  // Cleanup: Revoke object URL when component unmounts
+  useEffect(() => {
+    return () => {
+      if (filePreviewUrl) {
+        URL.revokeObjectURL(filePreviewUrl);
+      }
+    };
+  }, [filePreviewUrl]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -61,6 +71,7 @@ export default function ExtraccionPage() {
       
       if (validTypes.includes(droppedFile.type)) {
         setFile(droppedFile);
+        setFilePreviewUrl(URL.createObjectURL(droppedFile));
         setError('');
       } else {
         setError('Por favor, sube archivos PDF o imágenes (PNG, JPG, WEBP)');
@@ -75,6 +86,7 @@ export default function ExtraccionPage() {
       
       if (validTypes.includes(selectedFile.type)) {
         setFile(selectedFile);
+        setFilePreviewUrl(URL.createObjectURL(selectedFile));
         setError('');
       } else {
         setError('Por favor, sube archivos PDF o imágenes (PNG, JPG, WEBP)');
@@ -177,7 +189,11 @@ export default function ExtraccionPage() {
   };
 
   const handleReset = () => {
+    if (filePreviewUrl) {
+      URL.revokeObjectURL(filePreviewUrl);
+    }
     setFile(null);
+    setFilePreviewUrl(null);
     setResult(null);
     setError('');
     setSuccessMessage('');
@@ -478,13 +494,13 @@ export default function ExtraccionPage() {
             </form>
           </div>
 
-          {/* Results Section */}
+          {/* Preview & Results Section */}
           <div className="bg-white dark:bg-zinc-800 rounded-2xl shadow-xl p-8">
             <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-6">
-              Datos Extraídos
+              Vista Previa y Datos
             </h2>
 
-            {!result && !loading && (
+            {!result && !loading && !filePreviewUrl && (
               <div className="flex flex-col items-center justify-center h-64 text-center">
                 <svg
                   className="w-16 h-16 text-zinc-300 dark:text-zinc-600 mb-4"
@@ -500,7 +516,7 @@ export default function ExtraccionPage() {
                   />
                 </svg>
                 <p className="text-zinc-500 dark:text-zinc-400">
-                  Los datos extraídos aparecerán aquí
+                  La vista previa y datos extraídos aparecerán aquí
                 </p>
               </div>
             )}
@@ -517,30 +533,79 @@ export default function ExtraccionPage() {
               </div>
             )}
 
-            {result && (
+            {/* Document Preview */}
+            {filePreviewUrl && file && (
               <div className="space-y-4">
-                <div className="bg-zinc-50 dark:bg-zinc-900 rounded-lg p-4 max-h-[600px] overflow-y-auto">
-                  <pre className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap font-mono">
-                    {JSON.stringify(result, null, 2)}
-                  </pre>
+                <div className="bg-zinc-50 dark:bg-zinc-900 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    Documento Cargado
+                  </h3>
+                  
+                  <div className="bg-white dark:bg-zinc-800 rounded border-2 border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                    {file.type === 'application/pdf' ? (
+                      <div className="relative w-full" style={{ height: '500px' }}>
+                        <iframe
+                          src={filePreviewUrl}
+                          className="w-full h-full"
+                          title="PDF Preview"
+                        />
+                      </div>
+                    ) : (
+                      <div className="relative w-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-900 p-4">
+                        <img
+                          src={filePreviewUrl}
+                          alt="Invoice preview"
+                          className="max-w-full max-h-[500px] object-contain rounded"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-4">
+                    <span>📄 {file.name}</span>
+                    <span>📏 {(file.size / 1024).toFixed(2)} KB</span>
+                    <span>🔖 {file.type.split('/')[1].toUpperCase()}</span>
+                  </div>
                 </div>
-                
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(JSON.stringify(result, null, 2));
-                    }}
-                    className="flex-1 px-4 py-2 bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-lg hover:bg-zinc-300 dark:hover:bg-zinc-600 transition font-medium"
-                  >
-                    Copiar JSON
-                  </button>
-                  <button
-                    onClick={handleReset}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
-                  >
-                    Nueva Factura
-                  </button>
-                </div>
+
+                {/* Extracted Data */}
+                {result && (
+                  <div className="bg-zinc-50 dark:bg-zinc-900 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3 flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Datos Extraídos
+                    </h3>
+                    
+                    <div className="bg-white dark:bg-zinc-800 rounded border-2 border-zinc-200 dark:border-zinc-700 p-4 max-h-[400px] overflow-y-auto">
+                      <pre className="text-xs text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap font-mono">
+                        {JSON.stringify(result, null, 2)}
+                      </pre>
+                    </div>
+                    
+                    <div className="flex gap-3 mt-3">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(JSON.stringify(result, null, 2));
+                        }}
+                        className="flex-1 px-4 py-2 bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-lg hover:bg-zinc-300 dark:hover:bg-zinc-600 transition font-medium text-sm"
+                      >
+                        📋 Copiar JSON
+                      </button>
+                      <button
+                        onClick={handleReset}
+                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-sm"
+                      >
+                        🔄 Nueva Factura
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
