@@ -3,7 +3,7 @@ import { userDb } from '@/lib/db/users';
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('📥 Receiving signup request...');
+    console.log(' Receiving signup request...');
 
     // Get data from body
     const body = await request.json();
