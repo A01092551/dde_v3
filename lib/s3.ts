@@ -1,4 +1,5 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 // Initialize S3 client
 const s3Client = new S3Client({
@@ -47,5 +48,36 @@ export async function uploadToS3({
   } catch (error) {
     console.error('❌ Error uploading to S3:', error);
     throw new Error(`Failed to upload file to S3: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+export interface GetPresignedUrlParams {
+  s3Key: string;
+  bucketName?: string;
+  expiresIn?: number; // seconds
+}
+
+/**
+ * Generate a pre-signed URL for temporary access to a private S3 object
+ */
+export async function getPresignedDownloadUrl({
+  s3Key,
+  bucketName = process.env.AWS_S3_BUCKET_NAME || 'invoices-bucket',
+  expiresIn = 3600, // 1 hour default
+}: GetPresignedUrlParams): Promise<string> {
+  try {
+    const command = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: s3Key,
+    });
+
+    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn });
+    
+    console.log('✅ Generated pre-signed URL for:', s3Key);
+    return signedUrl;
+
+  } catch (error) {
+    console.error('❌ Error generating pre-signed URL:', error);
+    throw new Error(`Failed to generate pre-signed URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }

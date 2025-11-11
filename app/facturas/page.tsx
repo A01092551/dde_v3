@@ -67,6 +67,8 @@ export default function FacturasPage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [signedImageUrl, setSignedImageUrl] = useState<string | null>(null);
+  const [loadingImage, setLoadingImage] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -115,11 +117,28 @@ export default function FacturasPage() {
     router.push('/login');
   };
 
-  const openDrawer = (factura: Factura) => {
+  const openDrawer = async (factura: Factura) => {
     setSelectedFactura(factura);
     setEditedData(JSON.parse(JSON.stringify(factura))); // Deep copy
     setIsDrawerOpen(true);
     setSaveSuccess(false);
+    setSignedImageUrl(null);
+
+    // Load signed URL if S3 key exists
+    if (factura.metadata.s3Key) {
+      setLoadingImage(true);
+      try {
+        const response = await fetch(`/api/invoices/image?key=${encodeURIComponent(factura.metadata.s3Key)}`);
+        if (response.ok) {
+          const data = await response.json();
+          setSignedImageUrl(data.url);
+        }
+      } catch (error) {
+        console.error('Error loading image:', error);
+      } finally {
+        setLoadingImage(false);
+      }
+    }
   };
 
   const closeDrawer = () => {
@@ -436,7 +455,7 @@ export default function FacturasPage() {
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               
               {/* Document Preview Section */}
-              {editedData.metadata.s3Url && (
+              {editedData.metadata.s3Key && (
                 <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-6">
                   <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -446,19 +465,32 @@ export default function FacturasPage() {
                     Documento Original
                   </h3>
                   <div className="bg-white dark:bg-zinc-900 rounded-lg border-2 border-zinc-200 dark:border-zinc-700 overflow-hidden">
-                    {editedData.metadata.fileName.toLowerCase().endsWith('.pdf') ? (
-                      <iframe
-                        src={editedData.metadata.s3Url}
-                        className="w-full h-[500px]"
-                        title="Invoice PDF"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center p-4 bg-zinc-100 dark:bg-zinc-900">
-                        <img
-                          src={editedData.metadata.s3Url}
-                          alt="Invoice"
-                          className="max-w-full max-h-[500px] object-contain rounded"
+                    {loadingImage ? (
+                      <div className="flex items-center justify-center h-[500px]">
+                        <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      </div>
+                    ) : signedImageUrl ? (
+                      editedData.metadata.fileName.toLowerCase().endsWith('.pdf') ? (
+                        <iframe
+                          src={signedImageUrl}
+                          className="w-full h-[500px]"
+                          title="Invoice PDF"
                         />
+                      ) : (
+                        <div className="flex items-center justify-center p-4 bg-zinc-100 dark:bg-zinc-900">
+                          <img
+                            src={signedImageUrl}
+                            alt="Invoice"
+                            className="max-w-full max-h-[500px] object-contain rounded"
+                          />
+                        </div>
+                      )
+                    ) : (
+                      <div className="flex items-center justify-center h-[500px] text-zinc-500">
+                        No se pudo cargar la imagen
                       </div>
                     )}
                   </div>
