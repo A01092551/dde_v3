@@ -189,6 +189,30 @@ export default function FacturasPage() {
   const handleSaveChanges = async () => {
     if (!editedData) return;
 
+    // Validar que los campos numéricos sean válidos
+    const numericFields = ['subtotal', 'iva', 'total'];
+    const invalidFields: string[] = [];
+
+    for (const field of numericFields) {
+      const value = editedData[field];
+      if (value !== undefined && value !== null && value !== '') {
+        if (isNaN(Number(value)) || typeof value === 'string') {
+          invalidFields.push(field);
+        }
+      }
+    }
+
+    if (invalidFields.length > 0) {
+      const fieldNames: { [key: string]: string } = {
+        subtotal: 'Subtotal',
+        iva: 'IVA',
+        total: 'Total'
+      };
+      const invalidFieldNames = invalidFields.map(f => fieldNames[f]).join(', ');
+      alert(`❌ No se puede guardar: Los campos ${invalidFieldNames} solo aceptan valores numéricos. Por favor, elimine las letras e ingrese solo números.`);
+      return;
+    }
+
     setIsSaving(true);
     try {
       const response = await fetch(`/api/invoices/${editedData._id}`, {
@@ -225,6 +249,18 @@ export default function FacturasPage() {
 
   const updateField = (path: string, value: any) => {
     if (!editedData) return;
+    
+    // Validar campos numéricos (subtotal, iva, total)
+    const numericFields = ['subtotal', 'iva', 'total'];
+    const fieldName = path.split('.').pop();
+    
+    if (fieldName && numericFields.includes(fieldName)) {
+      // Si el valor es NaN o está vacío, no actualizar
+      if (value !== '' && isNaN(value)) {
+        // No permitir valores no numéricos
+        return;
+      }
+    }
     
     const newData = JSON.parse(JSON.stringify(editedData));
     const keys = path.split('.');
@@ -664,7 +700,16 @@ export default function FacturasPage() {
                           type="number"
                           step="0.01"
                           value={editedData.subtotal || ''}
-                          onChange={(e) => updateField('subtotal', parseFloat(e.target.value))}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateField('subtotal', val === '' ? '' : parseFloat(val));
+                          }}
+                          onKeyPress={(e) => {
+                            // Permitir solo números, punto decimal y teclas de control
+                            if (!/[0-9.]/.test(e.key) && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'Tab' && e.key !== 'Enter') {
+                              e.preventDefault();
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-lg bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
@@ -676,7 +721,16 @@ export default function FacturasPage() {
                           type="number"
                           step="0.01"
                           value={editedData.iva || ''}
-                          onChange={(e) => updateField('iva', parseFloat(e.target.value))}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateField('iva', val === '' ? '' : parseFloat(val));
+                          }}
+                          onKeyPress={(e) => {
+                            // Permitir solo números, punto decimal y teclas de control
+                            if (!/[0-9.]/.test(e.key) && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'Tab' && e.key !== 'Enter') {
+                              e.preventDefault();
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-lg bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
@@ -688,7 +742,16 @@ export default function FacturasPage() {
                           type="number"
                           step="0.01"
                           value={editedData.total || ''}
-                          onChange={(e) => updateField('total', parseFloat(e.target.value))}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateField('total', val === '' ? '' : parseFloat(val));
+                          }}
+                          onKeyPress={(e) => {
+                            // Permitir solo números, punto decimal y teclas de control
+                            if (!/[0-9.]/.test(e.key) && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'Tab' && e.key !== 'Enter') {
+                              e.preventDefault();
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-lg bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
