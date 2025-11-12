@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { getApiUrl, API_CONFIG } from '@/lib/api-config';
 
 interface Item {
   descripcion?: string;
@@ -87,9 +88,10 @@ export default function FacturasPage() {
     setError('');
 
     try {
-      const url = search 
-        ? `/api/invoices?numero=${encodeURIComponent(search)}`
-        : '/api/invoices';
+      const endpoint = search 
+        ? `${API_CONFIG.ENDPOINTS.LIST_INVOICES}?numero=${encodeURIComponent(search)}`
+        : API_CONFIG.ENDPOINTS.LIST_INVOICES;
+      const url = getApiUrl(endpoint);
       
       const response = await fetch(url);
       
@@ -128,7 +130,8 @@ export default function FacturasPage() {
     if (factura.metadata.s3Key) {
       setLoadingImage(true);
       try {
-        const response = await fetch(`/api/invoices/image?key=${encodeURIComponent(factura.metadata.s3Key)}`);
+        const url = getApiUrl(`/api/invoices/image?key=${encodeURIComponent(factura.metadata.s3Key)}`);
+        const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           setSignedImageUrl(data.url);
@@ -160,7 +163,8 @@ export default function FacturasPage() {
 
     setIsDeleting(true);
     try {
-      const response = await fetch(`/api/invoices/${editedData._id}`, {
+      const url = getApiUrl(API_CONFIG.ENDPOINTS.DELETE_INVOICE(editedData._id));
+      const response = await fetch(url, {
         method: 'DELETE',
       });
 
@@ -215,7 +219,8 @@ export default function FacturasPage() {
 
     setIsSaving(true);
     try {
-      const response = await fetch(`/api/invoices/${editedData._id}`, {
+      const url = getApiUrl(API_CONFIG.ENDPOINTS.GET_INVOICE(editedData._id));
+      const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

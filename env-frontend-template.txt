@@ -1,0 +1,19 @@
+# ============================================
+# FRONTEND NEXT.JS - VARIABLES DE ENTORNO
+# ============================================
+#
+# Copia este archivo como ".env.local" en la raíz del proyecto
+# y reemplaza los valores con tus credenciales reales
+#
+# ============================================
+
+# Backend API URL (FastAPI)
+# Cambia esto si el backend corre en otro puerto o servidor
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+
+# NOTA: Las siguientes variables ya NO son necesarias en el frontend
+# porque ahora el backend FastAPI maneja toda la lógica de negocio:
+# - OPENAI_API_KEY (ahora en backend/.env)
+# - MONGODB_URI (ahora en backend/.env)
+# - MONGODB_DB (ahora en backend/.env)
+# - AWS_* (ahora en backend/.env)

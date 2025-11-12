@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { getApiUrl, API_CONFIG } from '@/lib/api-config';
 
 interface FacturaData {
   numeroFactura?: string;
@@ -124,14 +125,15 @@ export default function ExtraccionPage() {
       formData.append('file', file);
       console.log('✅ [FRONTEND] FormData created with file');
 
+      const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.EXTRACT_INVOICE);
       console.log('\n📤 [FRONTEND] Sending extraction request...');
-      console.log('   → Endpoint: POST /api/invoices');
+      console.log('   → Endpoint: POST', apiUrl);
       console.log('   → Content-Type: multipart/form-data');
       console.log('   → File size:', file.size, 'bytes');
       
       const requestStartTime = performance.now();
 
-      const response = await fetch('/api/invoices', {
+      const response = await fetch(apiUrl, {
         method: 'POST',
         body: formData,
       });
@@ -229,23 +231,23 @@ export default function ExtraccionPage() {
 
     try {
       console.log('\n📦 [FRONTEND] Preparing validation request...');
-      // Create FormData to send both the file and the extracted data
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('data', JSON.stringify(result));
-      console.log('✅ [FRONTEND] FormData prepared with file and extracted data');
+      // Send JSON data directly (FastAPI expects JSON, not FormData)
+      console.log('✅ [FRONTEND] Preparing JSON payload');
 
+      const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.VALIDATE_INVOICE);
       console.log('\n📤 [FRONTEND] Sending validation request...');
-      console.log('   → Endpoint: POST /api/invoices/validate');
-      console.log('   → Content-Type: multipart/form-data');
-      console.log('   → File:', file.name);
+      console.log('   → Endpoint: POST', apiUrl);
+      console.log('   → Content-Type: application/json');
       console.log('   → Data size:', JSON.stringify(result).length, 'characters');
       
       const requestStartTime = performance.now();
 
-      const response = await fetch('/api/invoices/validate', {
+      const response = await fetch(apiUrl, {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(result),
       });
 
       const requestEndTime = performance.now();

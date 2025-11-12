@@ -1,72 +1,185 @@
 # 📄 Sistema de Extracción de Datos de Facturas
 
-Aplicación web desarrollada con Next.js 16 y OpenAI GPT-4o para extraer automáticamente información estructurada de facturas en formato PDF o imagen.
+Sistema completo de extracción automática de información de facturas usando IA, con arquitectura separada en **Frontend (Next.js)** y **Backend (FastAPI)**.
+
+## 🏗️ Arquitectura
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     FRONTEND (Next.js)                      │
+│                    http://localhost:3000                    │
+│  - Interfaz de usuario                                      │
+│  - Carga de archivos                                        │
+│  - Visualización de facturas                                │
+└────────────────────────┬────────────────────────────────────┘
+                         │ REST API
+                         ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    BACKEND (FastAPI)                        │
+│                    http://localhost:8000                    │
+│  - Extracción con OpenAI GPT-4o                            │
+│  - Validación y lógica de negocio                          │
+│  - Gestión de MongoDB                                       │
+│  - Generación de URLs firmadas de S3                        │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        ↓                ↓                ↓
+   ┌─────────┐    ┌──────────┐    ┌──────────┐
+   │ MongoDB │    │ OpenAI   │    │  AWS S3  │
+   │  Atlas  │    │   API    │    │ (Images) │
+   └─────────┘    └──────────┘    └──────────┘
+```
 
 ## 🚀 Características
 
-- ✅ **Extracción automática de datos** de facturas usando OpenAI GPT-4o
-- 📄 **Soporte para PDFs** (usando Assistants API)
-- 🖼️ **Soporte para imágenes** (PNG, JPG, JPEG, WEBP) usando Vision API
-- 🗄️ **Validación y almacenamiento** en MongoDB Atlas
+- ✅ **Arquitectura separada**: Frontend y Backend independientes
+- ✅ **Extracción automática** de datos usando OpenAI GPT-4o
+- 📄 **Soporte para PDFs** (Assistants API)
+- 🖼️ **Soporte para imágenes** (PNG, JPG, JPEG, WEBP) con Vision API
+- 🗄️ **Almacenamiento en MongoDB Atlas**
+- ☁️ **Imágenes en AWS S3** con URLs firmadas
 - 🔍 **Detección de duplicados** por número de factura
-- 🔐 **Sistema de autenticación** simple
-- 📊 **Visualización de datos** extraídos en formato JSON
+- 🔐 **Sistema de autenticación** con SQLite
+- 📊 **CRUD completo** de facturas
 - 🎨 **Interfaz moderna** con TailwindCSS y modo oscuro
 - 📥 **Drag & Drop** para cargar archivos
 
 ## 🛠️ Tecnologías
 
-- **Frontend**: Next.js 16, React 19, TypeScript 5, TailwindCSS
-- **IA**: OpenAI GPT-4o (Vision API + Assistants API)
-- **Base de Datos**: MongoDB Atlas con Mongoose
-- **Gestión de Estado**: React Hooks
+### Frontend
+- **Framework**: Next.js 16, React 19, TypeScript 5
 - **Estilos**: TailwindCSS con modo oscuro
+- **HTTP Client**: Fetch API
+
+### Backend
+- **Framework**: FastAPI (Python)
+- **IA**: OpenAI GPT-4o (Vision + Assistants API)
+- **Base de Datos**: MongoDB Atlas con Motor (async)
+- **Almacenamiento**: AWS S3 con boto3
+- **Validación**: Pydantic
+- **Auth**: SQLite local
 
 ## 📋 Requisitos Previos
 
+### Frontend
 - Node.js 18 o superior
 - npm o yarn
+
+### Backend
+- Python 3.11 o superior
+- pip
+- Entorno virtual (venv)
+
+### Servicios Externos
 - API Key de OpenAI con acceso a GPT-4o
 - Cuenta de MongoDB Atlas (gratuita)
+- Cuenta de AWS con S3 (opcional, para imágenes)
 
-## 🔧 Instalación
+## 🔧 Instalación y Configuración
 
-1. **Clonar el repositorio**
+### 1️⃣ Clonar el Repositorio
+
 ```bash
-git clone https://github.com/A01092551/dde_v2.git
-cd dde_v2
+git clone https://github.com/A01092551/dde_v3.git
+cd dde_v3
 ```
 
-2. **Instalar dependencias**
+### 2️⃣ Configurar Backend (FastAPI)
+
 ```bash
-npm install
+# Navegar a la carpeta del backend
+cd backend
+
+# Crear entorno virtual
+python -m venv venv
+
+# Activar entorno virtual
+# Windows:
+venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
+
+# Instalar dependencias
+pip install -r requirements.txt
+
+# Configurar variables de entorno
+# Copia el template y edita con tus credenciales
+cp env-template.txt .env
 ```
 
-3. **Configurar variables de entorno**
-
-Crea un archivo `.env.local` en la raíz del proyecto:
+Edita `backend/.env` con tus credenciales:
 
 ```env
 # OpenAI API Key
 OPENAI_API_KEY=tu-api-key-aqui
 
 # MongoDB Connection
-MONGODB_URI=mongodb+srv://usuario:<password>@cluster.mongodb.net/?appName=MyApp
+MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/?appName=MyApp
 MONGODB_DB=facturas_db
+
+# AWS S3 (opcional)
+AWS_REGION=us-east-2
+AWS_ACCESS_KEY_ID=tu-access-key
+AWS_SECRET_ACCESS_KEY=tu-secret-key
+AWS_S3_BUCKET_NAME=tu-bucket
+
+# Server Config
+HOST=0.0.0.0
+PORT=8000
+FRONTEND_URL=http://localhost:3000
 ```
 
-> 💡 **OpenAI**: Obtén tu API Key en https://platform.openai.com/api-keys
-> 
-> 💡 **MongoDB**: Obtén tu connection string en MongoDB Atlas. Ver [MONGODB_SETUP.md](./MONGODB_SETUP.md) para más detalles.
+### 3️⃣ Configurar Frontend (Next.js)
 
-4. **Ejecutar el servidor de desarrollo**
+```bash
+# En otra terminal, desde la raíz del proyecto
+npm install
+
+# Configurar variables de entorno
+# Copia el template y edita
+cp env-frontend-template.txt .env.local
+```
+
+Edita `.env.local`:
+
+```env
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+```
+
+### 4️⃣ Ejecutar el Sistema
+
+**Terminal 1 - Backend:**
+```bash
+cd backend
+python main.py
+```
+
+Deberías ver:
+```
+🚀 Iniciando aplicación...
+✅ Conectado a MongoDB
+✅ Aplicación lista
+INFO:     Uvicorn running on http://0.0.0.0:8000
+```
+
+**Terminal 2 - Frontend:**
 ```bash
 npm run dev
 ```
 
-5. **Abrir en el navegador**
+Deberías ver:
+```
+▲ Next.js 16.0.1
+- Local:        http://localhost:3000
+✓ Ready in 1.8s
+```
 
-Ve a [http://localhost:3000](http://localhost:3000)
+### 5️⃣ Acceder a la Aplicación
+
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **Documentación API**: http://localhost:8000/docs
 
 ## 📖 Uso
 
@@ -125,35 +238,49 @@ Ve a [http://localhost:3000](http://localhost:3000)
 ## 📁 Estructura del Proyecto
 
 ```
-dde_v2/
-├── app/
-│   ├── api/
-│   │   ├── extract-invoice/
-│   │   │   └── route.ts          # API endpoint para extracción
-│   │   └── validate-invoice/
-│   │       └── route.ts          # API endpoint para validación y guardado
+dde_v3/
+├── backend/                       # Backend FastAPI
+│   ├── config.py                  # Configuración y variables de entorno
+│   ├── main.py                    # Punto de entrada de FastAPI
+│   ├── requirements.txt           # Dependencias de Python
+│   ├── .env                       # Variables de entorno (no incluido)
+│   ├── env-template.txt           # Template de variables de entorno
+│   ├── database/
+│   │   ├── mongodb.py             # Conexión a MongoDB con Motor
+│   │   └── sqlite.py              # Conexión a SQLite para usuarios
+│   ├── models/
+│   │   ├── invoice.py             # Modelos Pydantic de facturas
+│   │   └── user.py                # Modelos Pydantic de usuarios
+│   ├── routers/
+│   │   ├── auth.py                # Endpoints de autenticación
+│   │   └── invoices.py            # Endpoints de facturas (CRUD)
+│   ├── services/
+│   │   ├── openai_service.py      # Servicio de OpenAI
+│   │   └── invoice_service.py     # Lógica de negocio de facturas
+│   └── README.md                  # Documentación del backend
+│
+├── app/                           # Frontend Next.js
 │   ├── login/
-│   │   └── page.tsx              # Página de login
+│   │   └── page.tsx               # Página de login
 │   ├── dashboard/
-│   │   └── page.tsx              # Menú principal (después del login)
+│   │   └── page.tsx               # Dashboard principal
 │   ├── extraccion/
-│   │   └── page.tsx              # Página de extracción de facturas
+│   │   └── page.tsx               # Página de extracción de facturas
 │   ├── facturas/
-│   │   └── page.tsx              # Página de consulta de facturas
-│   ├── layout.tsx                # Layout principal
-│   └── page.tsx                  # Página de inicio (redirección)
+│   │   └── page.tsx               # Página de gestión de facturas
+│   ├── layout.tsx                 # Layout principal
+│   └── page.tsx                   # Página de inicio
+│
 ├── lib/
-│   ├── mongodb.ts                # Configuración de MongoDB
-│   └── models/
-│       └── Factura.ts            # Modelo de Mongoose para facturas
-├── notebooks/
-│   └── descargar_facturas.ipynb  # Notebook para descargar dataset
-├── public/                        # Archivos estáticos
-├── .env.local                     # Variables de entorno (no incluido)
-├── env-template.txt               # Plantilla de variables de entorno
-├── MONGODB_SETUP.md               # Guía de configuración de MongoDB
-├── API_EXAMPLES.md                # Ejemplos de uso de API endpoints
-└── package.json                   # Dependencias del proyecto
+│   └── api-config.ts              # Configuración de URLs del backend
+│
+├── .env.local                     # Variables de entorno frontend (no incluido)
+├── env-frontend-template.txt      # Template de variables de entorno
+├── ARQUITECTURA_SEPARADA.md       # Documentación de arquitectura
+├── GUIA_EJECUCION.md              # Guía de ejecución paso a paso
+├── CONFIGURAR_S3.md               # Guía de configuración de S3
+├── PRUEBAS_CURL.md                # Ejemplos de pruebas con curl
+└── package.json                   # Dependencias del frontend
 ```
 
 ## 🔑 Campos Extraídos

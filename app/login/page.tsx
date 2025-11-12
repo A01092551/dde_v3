@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { getApiUrl, API_CONFIG } from '@/lib/api-config';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -34,15 +35,16 @@ export default function LoginPage() {
     console.log('✅ [FRONTEND] Client-side validation passed');
 
     try {
+      const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.LOGIN);
       console.log('📤 [FRONTEND] Preparing API request...');
-      console.log('   → Endpoint: POST /api/login');
+      console.log('   → Endpoint: POST', apiUrl);
       console.log('   → Content-Type: application/json');
       console.log('   → Payload:', { email, password: '***hidden***' });
       
       const requestStartTime = performance.now();
       
-      // Call login API
-      const response = await fetch('/api/login', {
+      // Call login API (FastAPI Backend)
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
