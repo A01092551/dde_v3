@@ -22,17 +22,30 @@ interface FacturaData {
   [key: string]: any;
 }
 
+interface InvoiceItem {
+  file: File;
+  previewUrl: string;
+  extractedData: FacturaData | null;
+  isProcessed: boolean;
+  isValidated: boolean;
+  error?: string;
+}
+
 export default function ExtraccionPage() {
-  const [file, setFile] = useState<File | null>(null);
-  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+  // Estados para múltiples facturas
+  const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [validating, setValidating] = useState(false);
-  const [result, setResult] = useState<FacturaData | null>(null);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [dragActive, setDragActive] = useState(false);
-  const [isValidated, setIsValidated] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedData, setEditedData] = useState<FacturaData | null>(null);
   const router = useRouter();
+
+  // Factura actual
+  const currentInvoice = invoices[currentIndex] || null;
 
   useEffect(() => {
     // Verificar autenticación
@@ -42,14 +55,15 @@ export default function ExtraccionPage() {
     }
   }, [router]);
 
-  // Cleanup: Revoke object URL when component unmounts
+  // Cleanup: Revoke object URLs when component unmounts
   useEffect(() => {
     return () => {
-      if (filePreviewUrl) {
-        URL.revokeObjectURL(filePreviewUrl);
-      }
+      // Cleanup se ejecuta solo al desmontar el componente
+      // Accedemos a invoices a través de un ref para evitar dependencias
     };
-  }, [filePreviewUrl]);
+  }, []);
+
+  // Cleanup manual cuando se elimina una factura (ya está en handleRemoveInvoice)
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -66,122 +80,118 @@ export default function ExtraccionPage() {
     e.stopPropagation();
     setDragActive(false);
 
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const droppedFile = e.dataTransfer.files[0];
-      const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-      
-      if (validTypes.includes(droppedFile.type)) {
-        setFile(droppedFile);
-        setFilePreviewUrl(URL.createObjectURL(droppedFile));
-        setError('');
-      } else {
-        setError('Por favor, sube archivos PDF o imágenes (PNG, JPG, WEBP)');
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(Array.from(e.dataTransfer.files));
+    }
+  };
+
+  const handleFiles = (files: File[]) => {
+    const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    const newInvoices: InvoiceItem[] = [];
+
+    files.forEach(file => {
+      if (validTypes.includes(file.type)) {
+        newInvoices.push({
+          file,
+          previewUrl: URL.createObjectURL(file),
+          extractedData: null,
+          isProcessed: false,
+          isValidated: false,
+        });
       }
+    });
+
+    if (newInvoices.length > 0) {
+      setInvoices(prev => [...prev, ...newInvoices]);
+      setError('');
+      setSuccessMessage(`${newInvoices.length} factura(s) cargada(s)`);
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } else {
+      setError('Por favor, sube archivos PDF o imágenes (PNG, JPG, WEBP)');
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-      
-      if (validTypes.includes(selectedFile.type)) {
-        setFile(selectedFile);
-        setFilePreviewUrl(URL.createObjectURL(selectedFile));
-        setError('');
-      } else {
-        setError('Por favor, sube archivos PDF o imágenes (PNG, JPG, WEBP)');
-      }
+    if (e.target.files && e.target.files.length > 0) {
+      handleFiles(Array.from(e.target.files));
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    console.log('\n═══════════════════════════════════════════════════════');
-    console.log('📄 [FRONTEND] INVOICE EXTRACTION PROCESS STARTED');
-    console.log('═══════════════════════════════════════════════════════');
-    console.log('⏰ Timestamp:', new Date().toISOString());
-    
-    if (!file) {
-      console.log('❌ [FRONTEND] Validation failed: No file selected');
-      setError('Por favor, selecciona un archivo (PDF o imagen)');
+    if (invoices.length === 0) {
+      setError('Por favor, carga al menos una factura');
       return;
     }
 
-    console.log('📎 File selected:');
-    console.log('   → Name:', file.name);
-    console.log('   → Type:', file.type);
-    console.log('   → Size:', (file.size / 1024).toFixed(2), 'KB');
-    console.log('   → Last modified:', new Date(file.lastModified).toISOString());
-
     setLoading(true);
     setError('');
-    setResult(null);
 
-    try {
-      console.log('\n📦 [FRONTEND] Preparing FormData...');
-      const formData = new FormData();
-      formData.append('file', file);
-      console.log('✅ [FRONTEND] FormData created with file');
+    // Procesar todas las facturas pendientes en secuencia
+    let processedCount = 0;
+    let errorCount = 0;
 
-      const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.EXTRACT_INVOICE);
-      console.log('\n📤 [FRONTEND] Sending extraction request...');
-      console.log('   → Endpoint: POST', apiUrl);
-      console.log('   → Content-Type: multipart/form-data');
-      console.log('   → File size:', file.size, 'bytes');
+    for (let i = 0; i < invoices.length; i++) {
+      const invoice = invoices[i];
       
-      const requestStartTime = performance.now();
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const requestEndTime = performance.now();
-      const requestDuration = (requestEndTime - requestStartTime).toFixed(2);
-
-      console.log('\n📥 [FRONTEND] Response received from backend');
-      console.log('   → Status:', response.status, response.statusText);
-      console.log('   → Duration:', requestDuration, 'ms');
-      console.log('   → Content-Type:', response.headers.get('content-type'));
-
-      if (!response.ok) {
-        console.log('❌ [FRONTEND] Extraction failed');
-        console.log('   → Status code:', response.status);
-        throw new Error('Error al procesar la factura');
+      // Saltar facturas ya procesadas
+      if (invoice.isProcessed) {
+        continue;
       }
 
-      console.log('\n📋 [FRONTEND] Parsing response data...');
-      const data = await response.json();
-      console.log('✅ [FRONTEND] Response parsed successfully');
-      console.log('\n📊 [FRONTEND] Extracted data summary:');
-      console.log('   → Invoice number:', data.numeroFactura || 'N/A');
-      console.log('   → Date:', data.fecha || 'N/A');
-      console.log('   → Total:', data.total || 'N/A');
-      console.log('   → Items count:', data.items?.length || 0);
-      console.log('   → Metadata:', data.metadata);
-      console.log('\n📄 [FRONTEND] Full extracted data:', data);
-      
-      setResult(data);
-      
-      console.log('═══════════════════════════════════════════════════════');
-      console.log('✅ [FRONTEND] EXTRACTION COMPLETED SUCCESSFULLY');
-      console.log('═══════════════════════════════════════════════════════\n');
-    } catch (err) {
-      console.log('\n═══════════════════════════════════════════════════════');
-      console.error('❌ [FRONTEND] EXTRACTION FAILED WITH ERROR');
-      console.log('═══════════════════════════════════════════════════════');
-      console.error('💥 Error details:', err);
-      console.error('   → Error type:', err instanceof Error ? err.constructor.name : typeof err);
-      console.error('   → Error message:', err instanceof Error ? err.message : String(err));
-      if (err instanceof Error && err.stack) {
-        console.error('   → Stack trace:', err.stack);
+      try {
+        // Actualizar el índice actual para mostrar qué factura se está procesando
+        setCurrentIndex(i);
+        setSuccessMessage(`🔄 Procesando factura ${i + 1}/${invoices.length}: ${invoice.file.name}...`);
+
+        const formData = new FormData();
+        formData.append('file', invoice.file);
+
+        const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.EXTRACT_INVOICE);
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error('Error al procesar la factura');
+        }
+
+        const data = await response.json();
+        
+        // Actualizar la factura con los datos extraídos
+        setInvoices(prev => prev.map((inv, idx) => 
+          idx === i 
+            ? { ...inv, extractedData: data, isProcessed: true }
+            : inv
+        ));
+        
+        processedCount++;
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Error al procesar el archivo';
+        
+        // Marcar error en la factura
+        setInvoices(prev => prev.map((inv, idx) => 
+          idx === i 
+            ? { ...inv, error: errorMsg }
+            : inv
+        ));
+        
+        errorCount++;
       }
-      setError(err instanceof Error ? err.message : 'Error al procesar el archivo');
-    } finally {
-      setLoading(false);
     }
+
+    setLoading(false);
+    
+    // Mensaje final
+    if (errorCount === 0) {
+      setSuccessMessage(`✅ ${processedCount} factura(s) procesada(s) exitosamente`);
+    } else {
+      setSuccessMessage(`⚠️ ${processedCount} procesada(s), ${errorCount} con errores`);
+    }
+    
+    setTimeout(() => setSuccessMessage(''), 5000);
   };
 
   const handleLogout = () => {
@@ -191,104 +201,99 @@ export default function ExtraccionPage() {
   };
 
   const handleReset = () => {
-    if (filePreviewUrl) {
-      URL.revokeObjectURL(filePreviewUrl);
-    }
-    setFile(null);
-    setFilePreviewUrl(null);
-    setResult(null);
+    // Limpiar URLs de todas las facturas
+    invoices.forEach(invoice => {
+      if (invoice.previewUrl) {
+        URL.revokeObjectURL(invoice.previewUrl);
+      }
+    });
+    
+    setInvoices([]);
+    setCurrentIndex(0);
     setError('');
     setSuccessMessage('');
-    setIsValidated(false);
+    setIsEditing(false);
+    setEditedData(null);
+  };
+
+  const handleRemoveInvoice = (index: number) => {
+    const invoice = invoices[index];
+    if (invoice.previewUrl) {
+      URL.revokeObjectURL(invoice.previewUrl);
+    }
+    
+    const newInvoices = invoices.filter((_, idx) => idx !== index);
+    setInvoices(newInvoices);
+    
+    // Ajustar el índice actual si es necesario
+    if (currentIndex >= newInvoices.length && newInvoices.length > 0) {
+      setCurrentIndex(newInvoices.length - 1);
+    } else if (newInvoices.length === 0) {
+      setCurrentIndex(0);
+    }
+  };
+
+  const handleNextInvoice = () => {
+    if (currentIndex < invoices.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+      setIsEditing(false);
+      setEditedData(null);
+      setError('');
+    }
+  };
+
+  const handlePrevInvoice = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+      setIsEditing(false);
+      setEditedData(null);
+      setError('');
+    }
   };
 
   const handleValidate = async () => {
-    console.log('\n═══════════════════════════════════════════════════════');
-    console.log('✅ [FRONTEND] VALIDATION & SAVE PROCESS STARTED');
-    console.log('═══════════════════════════════════════════════════════');
-    console.log('⏰ Timestamp:', new Date().toISOString());
-    
-    if (!result) {
-      console.log('❌ [FRONTEND] Validation failed: No extracted data');
+    if (!currentInvoice || !currentInvoice.extractedData) {
       setError('No hay datos para validar');
       return;
     }
 
-    if (!file) {
-      console.log('❌ [FRONTEND] Validation failed: No file available');
-      setError('No hay archivo para subir');
+    if (currentInvoice.isValidated) {
+      setError('Esta factura ya ha sido validada');
       return;
     }
-
-    console.log('📋 [FRONTEND] Data to validate:');
-    console.log('   → Invoice number:', result.numeroFactura);
-    console.log('   → File name:', file.name);
-    console.log('   → File size:', file.size, 'bytes');
 
     setValidating(true);
     setError('');
     setSuccessMessage('');
 
     try {
-      console.log('\n📦 [FRONTEND] Preparing validation request...');
-      // Send JSON data directly (FastAPI expects JSON, not FormData)
-      console.log('✅ [FRONTEND] Preparing JSON payload');
-
       const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.VALIDATE_INVOICE);
-      console.log('\n📤 [FRONTEND] Sending validation request...');
-      console.log('   → Endpoint: POST', apiUrl);
-      console.log('   → Content-Type: application/json');
-      console.log('   → Data size:', JSON.stringify(result).length, 'characters');
-      
-      const requestStartTime = performance.now();
-
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(result),
+        body: JSON.stringify(currentInvoice.extractedData),
       });
 
-      const requestEndTime = performance.now();
-      const requestDuration = (requestEndTime - requestStartTime).toFixed(2);
-
-      console.log('\n📥 [FRONTEND] Response received from backend');
-      console.log('   → Status:', response.status, response.statusText);
-      console.log('   → Duration:', requestDuration, 'ms');
-
       const data = await response.json();
-      console.log('📋 [FRONTEND] Response data:', data);
 
       if (!response.ok) {
-        console.log('❌ [FRONTEND] Validation failed');
-        console.log('   → Status code:', response.status);
         if (response.status === 409) {
-          console.log('   → Reason: Duplicate invoice detected');
           throw new Error('Esta factura ya ha sido validada anteriormente');
         }
-        console.log('   → Error:', data.error);
         throw new Error(data.error || 'Error al validar la factura');
       }
-
-      console.log('✅ [FRONTEND] Validation successful!');
-      console.log('   → Invoice ID:', data.id);
-      console.log('   → Invoice number:', data.numeroFactura);
-      console.log('   → S3 URL:', data.s3Url);
+      
+      // Marcar como validada
+      setInvoices(prev => prev.map((inv, idx) => 
+        idx === currentIndex 
+          ? { ...inv, isValidated: true }
+          : inv
+      ));
       
       setSuccessMessage(`✅ Factura validada y guardada exitosamente (ID: ${data.id})`);
-      setIsValidated(true);
-      
-      console.log('═══════════════════════════════════════════════════════');
-      console.log('✅ [FRONTEND] VALIDATION & SAVE COMPLETED SUCCESSFULLY');
-      console.log('═══════════════════════════════════════════════════════\n');
     } catch (err) {
-      console.log('\n═══════════════════════════════════════════════════════');
-      console.error('❌ [FRONTEND] VALIDATION FAILED WITH ERROR');
-      console.log('═══════════════════════════════════════════════════════');
-      console.error('💥 Error details:', err);
-      console.error('   → Error type:', err instanceof Error ? err.constructor.name : typeof err);
-      console.error('   → Error message:', err instanceof Error ? err.message : String(err));
       setError(err instanceof Error ? err.message : 'Error al validar la factura');
     } finally {
       setValidating(false);
@@ -361,73 +366,85 @@ export default function ExtraccionPage() {
                   type="file"
                   id="file-upload"
                   accept=".pdf,.png,.jpg,.jpeg,.webp"
+                  multiple
                   onChange={handleFileChange}
                   className="hidden"
                 />
                 
-                {!file ? (
-                  <div className="flex items-center justify-between">
-                    <label htmlFor="file-upload" className="cursor-pointer">
-                      <span className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium whitespace-nowrap">
-                        Seleccionar Archivo
-                      </span>
-                    </label>
-                    <div className="flex items-center gap-4">
-                      <svg
-                        className="w-12 h-12 text-zinc-400 dark:text-zinc-500"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                        />
-                      </svg>
-                      <div>
-                        <p className="text-base font-medium text-zinc-700 dark:text-zinc-300">
-                          Arrastra tu factura aquí
-                        </p>
-                        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                          PDF o imagen (PNG, JPG, WEBP)
-                        </p>
-                      </div>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="file-upload" className="cursor-pointer">
+                    <span className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium whitespace-nowrap">
+                      📂 Seleccionar Facturas
+                    </span>
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <svg
+                      className="w-12 h-12 text-zinc-400 dark:text-zinc-500"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                      />
+                    </svg>
+                    <div>
+                      <p className="text-base font-medium text-zinc-700 dark:text-zinc-300">
+                        Arrastra tus facturas aquí
+                      </p>
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                        Múltiples archivos: PDF o imágenes
+                      </p>
                     </div>
                   </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={handleReset}
-                      className="px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition font-medium"
-                    >
-                      Cambiar archivo
-                    </button>
-                    <div className="flex items-center gap-4">
-                      <svg
-                        className="w-12 h-12 text-green-500"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                </div>
+
+                {/* Lista de facturas cargadas */}
+                {invoices.length > 0 && (
+                  <div className="mt-4 space-y-2 max-h-40 overflow-y-auto">
+                    {invoices.map((invoice, index) => (
+                      <div 
+                        key={index}
+                        className={`flex items-center justify-between p-2 rounded-lg border-2 transition ${
+                          index === currentIndex 
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                            : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300'
+                        }`}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                      <div>
-                        <p className="text-base font-medium text-zinc-700 dark:text-zinc-300">
-                          {file.name}
-                        </p>
-                        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                          {(file.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => setCurrentIndex(index)}
+                            className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                          >
+                            {invoice.isValidated ? (
+                              <span className="text-green-500">✅</span>
+                            ) : invoice.isProcessed ? (
+                              <span className="text-blue-500">📊</span>
+                            ) : invoice.error ? (
+                              <span className="text-red-500">❌</span>
+                            ) : (
+                              <span className="text-zinc-400">📄</span>
+                            )}
+                            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate">
+                              {invoice.file.name}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveInvoice(index)}
+                            className="text-red-500 hover:text-red-700 p-1"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -453,7 +470,7 @@ export default function ExtraccionPage() {
 
             {/* Preview Section - Fixed Height */}
             <div className="h-[600px] bg-zinc-50 dark:bg-zinc-900 rounded-lg p-4">
-              {!filePreviewUrl ? (
+              {!currentInvoice ? (
                 <div className="flex flex-col items-center justify-center h-full text-center bg-white dark:bg-zinc-800 rounded border-2 border-zinc-200 dark:border-zinc-700">
                   <svg
                     className="w-16 h-16 text-zinc-300 dark:text-zinc-600 mb-4"
@@ -475,22 +492,22 @@ export default function ExtraccionPage() {
                     />
                   </svg>
                   <p className="text-zinc-500 dark:text-zinc-400">
-                    La vista previa aparecerá aquí
+                    Carga facturas para ver la vista previa
                   </p>
                 </div>
               ) : (
                 <div className="h-full flex flex-col">
                   <div className="flex-1 bg-white dark:bg-zinc-800 rounded border-2 border-zinc-200 dark:border-zinc-700 overflow-hidden">
-                    {file && file.type === 'application/pdf' ? (
+                    {currentInvoice.file.type === 'application/pdf' ? (
                       <iframe
-                        src={filePreviewUrl}
+                        src={currentInvoice.previewUrl}
                         className="w-full h-full"
                         title="PDF Preview"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-900 p-4">
                         <img
-                          src={filePreviewUrl}
+                          src={currentInvoice.previewUrl}
                           alt="Invoice preview"
                           className="max-w-full max-h-full object-contain rounded"
                         />
@@ -498,13 +515,38 @@ export default function ExtraccionPage() {
                     )}
                   </div>
                   
-                  {file && (
-                    <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-4">
-                      <span>📄 {file.name}</span>
-                      <span>📏 {(file.size / 1024).toFixed(2)} KB</span>
-                      <span>🔖 {file.type.split('/')[1].toUpperCase()}</span>
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-4">
+                      <span>📄 {currentInvoice.file.name}</span>
+                      <span>📏 {(currentInvoice.file.size / 1024).toFixed(2)} KB</span>
+                      <span>🔖 {currentInvoice.file.type.split('/')[1].toUpperCase()}</span>
                     </div>
-                  )}
+                    
+                    {/* Navegación entre facturas */}
+                    {invoices.length > 1 && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handlePrevInvoice}
+                          disabled={currentIndex === 0}
+                          className="px-2 py-1 bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-300 dark:hover:bg-zinc-600"
+                        >
+                          ←
+                        </button>
+                        <span className="text-xs text-zinc-600 dark:text-zinc-400">
+                          {currentIndex + 1} / {invoices.length}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleNextInvoice}
+                          disabled={currentIndex === invoices.length - 1}
+                          className="px-2 py-1 bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-300 dark:hover:bg-zinc-600"
+                        >
+                          →
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -513,7 +555,7 @@ export default function ExtraccionPage() {
             <div className="mt-6">
               <button
                 onClick={handleSubmit}
-                disabled={!file || loading}
+                disabled={!currentInvoice || currentInvoice.isProcessed || loading}
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-400 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors duration-200 flex items-center justify-center"
               >
                 {loading ? (
@@ -524,6 +566,8 @@ export default function ExtraccionPage() {
                     </svg>
                     Procesando...
                   </>
+                ) : currentInvoice?.isProcessed ? (
+                  '✅ Ya Procesada'
                 ) : (
                   '🔍 Extraer Datos'
                 )}
@@ -537,7 +581,7 @@ export default function ExtraccionPage() {
               📊 Datos Extraídos
             </h2>
 
-            {!result && !loading && (
+            {!currentInvoice?.extractedData && !loading && (
               <div className="flex flex-col items-center justify-center h-96 text-center">
                 <svg
                   className="w-16 h-16 text-zinc-300 dark:text-zinc-600 mb-4"
@@ -576,60 +620,344 @@ export default function ExtraccionPage() {
             )}
 
             {/* Extracted Data */}
-            {result && (
+            {currentInvoice?.extractedData && (
               <div className="space-y-4">
-                <div className="bg-zinc-50 dark:bg-zinc-900 rounded-lg p-4">
-                  <div className="bg-white dark:bg-zinc-800 rounded border-2 border-zinc-200 dark:border-zinc-700 p-4 max-h-[500px] overflow-y-auto">
-                    <pre className="text-xs text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap font-mono">
-                      {JSON.stringify(result, null, 2)}
-                    </pre>
+                <div className="bg-white dark:bg-zinc-800 rounded-lg border-2 border-zinc-200 dark:border-zinc-700 max-h-[600px] overflow-y-auto">
+                  <div className="p-6 space-y-6">
+                    {/* Header con número y total */}
+                    <div className="bg-blue-600 -mx-6 -mt-6 px-6 py-4 mb-6">
+                      <div className="flex items-center justify-between text-white">
+                        <h3 className="text-2xl font-bold">{currentInvoice.extractedData.numeroFactura || 'Sin número'}</h3>
+                        <div className="text-right">
+                          <p className="text-sm opacity-90">{currentInvoice.extractedData.fecha || 'Sin fecha'}</p>
+                          <p className="text-2xl font-bold">{currentInvoice.extractedData.moneda || 'USD'} {currentInvoice.extractedData.total?.toFixed(2) || '0.00'}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Datos de la Factura */}
+                    <div>
+                      <h4 className="text-lg font-bold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Datos de la Factura
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Número de Factura</label>
+                          <input 
+                            type="text" 
+                            value={isEditing ? (editedData?.numeroFactura || '') : (currentInvoice.extractedData.numeroFactura || '')} 
+                            onChange={(e) => isEditing && setEditedData({...editedData!, numeroFactura: e.target.value})}
+                            readOnly={!isEditing} 
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-zinc-900 dark:text-white ${isEditing ? 'bg-white dark:bg-zinc-800 border-blue-500' : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-600'}`} 
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Fecha</label>
+                          <input 
+                            type="text" 
+                            value={isEditing ? (editedData?.fecha || '') : (currentInvoice.extractedData.fecha || '')} 
+                            onChange={(e) => isEditing && setEditedData({...editedData!, fecha: e.target.value})}
+                            readOnly={!isEditing} 
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-zinc-900 dark:text-white ${isEditing ? 'bg-white dark:bg-zinc-800 border-blue-500' : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-600'}`} 
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Fecha de Vencimiento</label>
+                          <input 
+                            type="text" 
+                            value={isEditing ? (editedData?.fechaVencimiento || '') : (currentInvoice.extractedData.fechaVencimiento || '')} 
+                            onChange={(e) => isEditing && setEditedData({...editedData!, fechaVencimiento: e.target.value})}
+                            readOnly={!isEditing} 
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-zinc-900 dark:text-white ${isEditing ? 'bg-white dark:bg-zinc-800 border-blue-500' : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-600'}`} 
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Moneda</label>
+                          <input 
+                            type="text" 
+                            value={isEditing ? (editedData?.moneda || '') : (currentInvoice.extractedData.moneda || '')} 
+                            onChange={(e) => isEditing && setEditedData({...editedData!, moneda: e.target.value})}
+                            readOnly={!isEditing} 
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-zinc-900 dark:text-white ${isEditing ? 'bg-white dark:bg-zinc-800 border-blue-500' : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-600'}`} 
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Proveedor */}
+                    {(currentInvoice.extractedData.proveedor || isEditing) && (
+                      <div>
+                        <h4 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">Proveedor</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Nombre</label>
+                            <input 
+                              type="text" 
+                              value={isEditing ? (editedData?.proveedor?.nombre || '') : (currentInvoice.extractedData.proveedor?.nombre || '')} 
+                              onChange={(e) => isEditing && setEditedData({...editedData!, proveedor: {...editedData?.proveedor, nombre: e.target.value}})}
+                              readOnly={!isEditing}
+                              className={`mt-1 w-full px-3 py-2 border rounded-lg text-zinc-900 dark:text-white ${isEditing ? 'bg-white dark:bg-zinc-800 border-blue-500' : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-600'}`}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">RFC/NIT</label>
+                            <input 
+                              type="text" 
+                              value={isEditing ? (editedData?.proveedor?.rfc || editedData?.proveedor?.nit || '') : (currentInvoice.extractedData.proveedor?.rfc || currentInvoice.extractedData.proveedor?.nit || '')} 
+                              onChange={(e) => isEditing && setEditedData({...editedData!, proveedor: {...editedData?.proveedor, rfc: e.target.value}})}
+                              readOnly={!isEditing}
+                              className={`mt-1 w-full px-3 py-2 border rounded-lg text-zinc-900 dark:text-white ${isEditing ? 'bg-white dark:bg-zinc-800 border-blue-500' : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-600'}`}
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Dirección</label>
+                            <input 
+                              type="text" 
+                              value={isEditing ? (editedData?.proveedor?.direccion || '') : (currentInvoice.extractedData.proveedor?.direccion || '')} 
+                              onChange={(e) => isEditing && setEditedData({...editedData!, proveedor: {...editedData?.proveedor, direccion: e.target.value}})}
+                              readOnly={!isEditing}
+                              className={`mt-1 w-full px-3 py-2 border rounded-lg text-zinc-900 dark:text-white ${isEditing ? 'bg-white dark:bg-zinc-800 border-blue-500' : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-600'}`}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Teléfono</label>
+                            <input 
+                              type="text" 
+                              value={isEditing ? (editedData?.proveedor?.telefono || '') : (currentInvoice.extractedData.proveedor?.telefono || '')} 
+                              onChange={(e) => isEditing && setEditedData({...editedData!, proveedor: {...editedData?.proveedor, telefono: e.target.value}})}
+                              readOnly={!isEditing}
+                              className={`mt-1 w-full px-3 py-2 border rounded-lg text-zinc-900 dark:text-white ${isEditing ? 'bg-white dark:bg-zinc-800 border-blue-500' : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-600'}`}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Cliente */}
+                    {(currentInvoice.extractedData.cliente || isEditing) && (
+                      <div>
+                        <h4 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">Cliente</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Nombre</label>
+                            <input 
+                              type="text" 
+                              value={isEditing ? (editedData?.cliente?.nombre || '') : (currentInvoice.extractedData.cliente?.nombre || '')} 
+                              onChange={(e) => isEditing && setEditedData({...editedData!, cliente: {...editedData?.cliente, nombre: e.target.value}})}
+                              readOnly={!isEditing}
+                              className={`mt-1 w-full px-3 py-2 border rounded-lg text-zinc-900 dark:text-white ${isEditing ? 'bg-white dark:bg-zinc-800 border-blue-500' : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-600'}`}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">RFC/NIT</label>
+                            <input 
+                              type="text" 
+                              value={isEditing ? (editedData?.cliente?.rfc || editedData?.cliente?.nit || '') : (currentInvoice.extractedData.cliente?.rfc || currentInvoice.extractedData.cliente?.nit || '')} 
+                              onChange={(e) => isEditing && setEditedData({...editedData!, cliente: {...editedData?.cliente, rfc: e.target.value}})}
+                              readOnly={!isEditing}
+                              className={`mt-1 w-full px-3 py-2 border rounded-lg text-zinc-900 dark:text-white ${isEditing ? 'bg-white dark:bg-zinc-800 border-blue-500' : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-600'}`}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Items */}
+                    {currentInvoice.extractedData.items && currentInvoice.extractedData.items.length > 0 && (
+                      <div>
+                        <h4 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">Artículos</h4>
+                        <div className="space-y-2">
+                          {currentInvoice.extractedData.items.map((item: any, index: number) => (
+                            <div key={index} className="bg-zinc-50 dark:bg-zinc-900 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                              <div className="grid grid-cols-4 gap-2 text-sm">
+                                <div className="col-span-2">
+                                  <span className="font-medium text-zinc-700 dark:text-zinc-300">{item.descripcion || 'Sin descripción'}</span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-zinc-600 dark:text-zinc-400">Cant: {item.cantidad || 0}</span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="font-semibold text-zinc-900 dark:text-white">${item.total?.toFixed(2) || '0.00'}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Totales */}
+                    <div className="border-t-2 border-zinc-200 dark:border-zinc-700 pt-4">
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center text-zinc-700 dark:text-zinc-300">
+                          <span>Subtotal:</span>
+                          {isEditing ? (
+                            <input 
+                              type="number" 
+                              step="0.01"
+                              value={editedData?.subtotal || 0} 
+                              onChange={(e) => setEditedData({...editedData!, subtotal: parseFloat(e.target.value) || 0})}
+                              className="w-32 px-3 py-1 border border-blue-500 rounded-lg text-zinc-900 dark:text-white bg-white dark:bg-zinc-800 text-right"
+                            />
+                          ) : (
+                            <span className="font-semibold">${currentInvoice.extractedData.subtotal?.toFixed(2) || '0.00'}</span>
+                          )}
+                        </div>
+                        <div className="flex justify-between items-center text-zinc-700 dark:text-zinc-300">
+                          <span>IVA:</span>
+                          {isEditing ? (
+                            <input 
+                              type="number" 
+                              step="0.01"
+                              value={editedData?.iva || 0} 
+                              onChange={(e) => setEditedData({...editedData!, iva: parseFloat(e.target.value) || 0})}
+                              className="w-32 px-3 py-1 border border-blue-500 rounded-lg text-zinc-900 dark:text-white bg-white dark:bg-zinc-800 text-right"
+                            />
+                          ) : (
+                            <span className="font-semibold">${currentInvoice.extractedData.iva?.toFixed(2) || '0.00'}</span>
+                          )}
+                        </div>
+                        <div className="flex justify-between items-center text-lg font-bold text-zinc-900 dark:text-white border-t-2 border-zinc-300 dark:border-zinc-600 pt-2">
+                          <span>Total:</span>
+                          {isEditing ? (
+                            <input 
+                              type="number" 
+                              step="0.01"
+                              value={editedData?.total || 0} 
+                              onChange={(e) => setEditedData({...editedData!, total: parseFloat(e.target.value) || 0})}
+                              className="w-32 px-3 py-1 border border-blue-500 rounded-lg text-zinc-900 dark:text-white bg-white dark:bg-zinc-800 text-right font-bold"
+                            />
+                          ) : (
+                            <span>${currentInvoice.extractedData.total?.toFixed(2) || '0.00'}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Información adicional */}
+                    {(currentInvoice.extractedData.formaPago || currentInvoice.extractedData.metodoPago || currentInvoice.extractedData.observaciones || isEditing) && (
+                      <div>
+                        <h4 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">Información Adicional</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Forma de Pago</label>
+                            <input 
+                              type="text" 
+                              value={isEditing ? (editedData?.formaPago || '') : (currentInvoice.extractedData.formaPago || '')} 
+                              onChange={(e) => isEditing && setEditedData({...editedData!, formaPago: e.target.value})}
+                              readOnly={!isEditing}
+                              className={`mt-1 w-full px-3 py-2 border rounded-lg text-zinc-900 dark:text-white ${isEditing ? 'bg-white dark:bg-zinc-800 border-blue-500' : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-600'}`}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Método de Pago</label>
+                            <input 
+                              type="text" 
+                              value={isEditing ? (editedData?.metodoPago || '') : (currentInvoice.extractedData.metodoPago || '')} 
+                              onChange={(e) => isEditing && setEditedData({...editedData!, metodoPago: e.target.value})}
+                              readOnly={!isEditing}
+                              className={`mt-1 w-full px-3 py-2 border rounded-lg text-zinc-900 dark:text-white ${isEditing ? 'bg-white dark:bg-zinc-800 border-blue-500' : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-600'}`}
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Observaciones</label>
+                            <textarea 
+                              value={isEditing ? (editedData?.observaciones || '') : (currentInvoice.extractedData.observaciones || '')} 
+                              onChange={(e) => isEditing && setEditedData({...editedData!, observaciones: e.target.value})}
+                              readOnly={!isEditing}
+                              rows={3} 
+                              className={`mt-1 w-full px-3 py-2 border rounded-lg text-zinc-900 dark:text-white ${isEditing ? 'bg-white dark:bg-zinc-800 border-blue-500' : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-600'}`}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(JSON.stringify(result, null, 2));
-                    }}
-                    className="w-full mt-3 px-4 py-2 bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-lg hover:bg-zinc-300 dark:hover:bg-zinc-600 transition font-medium text-sm"
-                  >
-                    📋 Copiar JSON
-                  </button>
                 </div>
 
-                {/* Validate Button */}
-                {!isValidated && (
-                  <button
-                    type="button"
-                    onClick={handleValidate}
-                    disabled={validating}
-                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-zinc-400 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors duration-200 flex items-center justify-center"
-                  >
-                    {validating ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Validando...
-                      </>
-                    ) : (
-                      <>
+                {/* Edit/Save Buttons */}
+                {!currentInvoice.isValidated && (
+                  <div className="space-y-3">
+                    {!isEditing ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditing(true);
+                          setEditedData(currentInvoice.extractedData);
+                        }}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors duration-200 flex items-center justify-center"
+                      >
                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
-                        Validar y Guardar en BD
-                      </>
+                        ✏️ Modificar Factura
+                      </button>
+                    ) : (
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsEditing(false);
+                            setEditedData(null);
+                          }}
+                          className="flex-1 bg-zinc-400 hover:bg-zinc-500 text-white font-semibold py-3 rounded-lg transition-colors duration-200"
+                        >
+                          ❌ Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInvoices(prev => prev.map((inv, idx) => 
+                              idx === currentIndex 
+                                ? { ...inv, extractedData: editedData }
+                                : inv
+                            ));
+                            setIsEditing(false);
+                          }}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors duration-200"
+                        >
+                          💾 Guardar Cambios
+                        </button>
+                      </div>
                     )}
-                  </button>
+                    
+                    <button
+                      type="button"
+                      onClick={handleValidate}
+                      disabled={validating || isEditing}
+                      className="w-full bg-green-600 hover:bg-green-700 disabled:bg-zinc-400 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors duration-200 flex items-center justify-center"
+                    >
+                      {validating ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Validando...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          ✅ Validar y Guardar en BD
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
 
-                {/* Validated Badge */}
-                {isValidated && (
+                {/* Success Message - Above Reset Button */}
+                {successMessage && (
                   <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-500 rounded-lg p-4">
-                    <div className="flex items-center justify-center gap-2 text-green-600 dark:text-green-400 font-semibold">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex items-center justify-center gap-2 text-green-600 dark:text-green-400 font-semibold text-sm">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      Factura validada y guardada
+                      {successMessage}
                     </div>
                   </div>
                 )}
