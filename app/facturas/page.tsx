@@ -194,7 +194,7 @@ export default function FacturasPage() {
     if (!editedData) return;
 
     // Validar que los campos numéricos sean válidos
-    const numericFields = ['subtotal', 'iva', 'total'];
+    const numericFields: (keyof Factura)[] = ['subtotal', 'iva', 'total'];
     const invalidFields: string[] = [];
 
     for (const field of numericFields) {

@@ -3,6 +3,7 @@ from config import settings
 import json
 import re
 import logging
+import os
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -16,11 +17,91 @@ class OpenAIService:
         )
     
     async def extract_from_pdf(self, file_content: bytes, filename: str) -> Dict[str, Any]:
-        """Extraer datos de un PDF usando Assistants API"""
+        """Extraer datos de un PDF - detecta si es imagen y usa Vision API"""
         logger.info(f"📄 Procesando PDF: {filename}")
         
         try:
-            # Subir archivo a OpenAI
+            # Intentar convertir PDF a imagen (para PDFs que son solo imágenes)
+            from pdf2image import pdfinfo_from_bytes, convert_from_bytes
+            import base64
+            
+            logger.info("🔍 Detectando tipo de PDF...")
+            
+            try:
+                # Configurar path de Poppler para Windows
+                poppler_path = None
+                if os.name == 'nt':  # Windows
+                    # Intentar obtener de variable de entorno primero
+                    poppler_path = os.environ.get('POPPLER_PATH')
+                    # Si no existe, usar ruta común de instalación
+                    if not poppler_path:
+                        common_paths = [
+                            r'C:\poppler-25.11.0\Library\bin',
+                            r'C:\Program Files\poppler\Library\bin',
+                            r'C:\poppler\Library\bin',
+                        ]
+                        for path in common_paths:
+                            if os.path.exists(path):
+                                poppler_path = path
+                                logger.info(f"✅ Poppler encontrado en: {poppler_path}")
+                                break
+                
+                # Convertir primera página del PDF a imagen
+                if poppler_path:
+                    images = convert_from_bytes(file_content, first_page=1, last_page=1, poppler_path=poppler_path)
+                else:
+                    images = convert_from_bytes(file_content, first_page=1, last_page=1)
+                
+                if images:
+                    logger.info("📸 PDF detectado como imagen - usando Vision API")
+                    
+                    # Convertir imagen a bytes
+                    import io
+                    img_byte_arr = io.BytesIO()
+                    images[0].save(img_byte_arr, format='PNG')
+                    img_byte_arr = img_byte_arr.getvalue()
+                    
+                    # Usar Vision API en lugar de Assistants
+                    base64_image = base64.b64encode(img_byte_arr).decode('utf-8')
+                    
+                    logger.info("📤 Enviando a Vision API...")
+                    response = self.client.chat.completions.create(
+                        model='gpt-4o',
+                        messages=[
+                            {
+                                'role': 'user',
+                                'content': [
+                                    {
+                                        'type': 'text',
+                                        'text': self._get_vision_prompt()
+                                    },
+                                    {
+                                        'type': 'image_url',
+                                        'image_url': {
+                                            'url': f'data:image/png;base64,{base64_image}'
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        max_tokens=2000
+                    )
+                    
+                    logger.info("✅ Respuesta recibida de Vision API")
+                    response_text = response.choices[0].message.content
+                    logger.info(f"📝 Respuesta (primeros 500 chars): {response_text[:500]}...")
+                    extracted_data = self._parse_json_response(response_text)
+                    
+                    return extracted_data
+                    
+            except ImportError:
+                logger.warning("⚠️  pdf2image no disponible - intentando con Assistants API")
+                # Continuar con el método original si pdf2image no está instalado
+            except Exception as pdf_error:
+                logger.warning(f"⚠️  No se pudo convertir PDF a imagen: {pdf_error}")
+                logger.info("🔄 Intentando con Assistants API...")
+            
+            # Método original: Assistants API (para PDFs con texto real)
             logger.info("📤 Subiendo archivo a OpenAI...")
             uploaded_file = self.client.files.create(
                 file=(filename, file_content),
@@ -74,7 +155,14 @@ class OpenAIService:
             if not assistant_message or not assistant_message.content:
                 raise Exception('No se recibió respuesta del asistente')
             
-            response_text = assistant_message.content[0].text.value
+            # Construir texto completo de la respuesta (puede venir en múltiples partes)
+            parts = []
+            for part in assistant_message.content:
+                if hasattr(part, "text") and part.text and hasattr(part.text, "value"):
+                    parts.append(part.text.value)
+            response_text = "\n".join(parts)
+            
+            logger.info(f"📝 Respuesta del asistente (primeros 500 chars): {response_text[:500]}...")
             extracted_data = self._parse_json_response(response_text)
             
             # Limpiar recursos
@@ -175,25 +263,41 @@ Devuelve SOLO el JSON sin texto adicional."""
 Devuelve SOLO el JSON sin texto adicional."""
     
     def _parse_json_response(self, response_text: str) -> Dict[str, Any]:
-        """Parsear respuesta JSON de OpenAI"""
+        """Parsear respuesta JSON de OpenAI de forma robusta"""
         try:
-            # Intentar encontrar JSON en bloques de código
+            # Estrategia 1: Intentar parsear el texto completo directamente
+            try:
+                return json.loads(response_text.strip())
+            except json.JSONDecodeError:
+                pass
+            
+            # Estrategia 2: Buscar JSON dentro de bloques de código ```json ... ```
             json_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', response_text)
-            json_string = json_match.group(1) if json_match else None
+            if json_match:
+                json_string = json_match.group(1)
+                logger.info("✅ JSON encontrado en bloque de código")
+            else:
+                # Estrategia 3: Buscar TODOS los bloques { ... } y tomar el más grande
+                candidates = re.findall(r'\{[\s\S]*?\}', response_text)
+                if candidates:
+                    # Tomar el candidato más largo (probablemente el JSON completo)
+                    json_string = max(candidates, key=len)
+                    logger.info(f"✅ JSON encontrado como objeto directo (tamaño: {len(json_string)} chars)")
+                else:
+                    logger.error("❌ No se encontró ningún bloque que parezca JSON")
+                    logger.error(f"Respuesta completa del asistente:\n{response_text}")
+                    raise ValueError('No se pudo encontrar JSON en la respuesta')
             
-            # Si no se encuentra en bloques, buscar JSON directo
-            if not json_string:
-                json_match = re.search(r'\{[\s\S]*\}', response_text)
-                json_string = json_match.group(0) if json_match else None
-            
-            if not json_string:
-                raise ValueError('No se pudo encontrar JSON en la respuesta')
-            
-            # Limpiar y parsear
+            # Limpiar trailing commas (común en respuestas de IA)
             cleaned_json = json_string.replace(',}', '}').replace(',]', ']')
-            return json.loads(cleaned_json)
+            
+            # Intentar parsear
+            parsed_data = json.loads(cleaned_json)
+            logger.info(f"✅ JSON parseado exitosamente con {len(parsed_data)} campos")
+            return parsed_data
             
         except json.JSONDecodeError as e:
             logger.error(f"❌ Error al parsear JSON: {e}")
-            logger.error(f"Respuesta: {response_text}")
+            logger.error(f"JSON candidato que falló:\n{json_string if 'json_string' in locals() else 'N/A'}")
+            logger.error(f"Respuesta completa del asistente:\n{response_text}")
             raise ValueError(f'No se pudo parsear el JSON: {e}')
