@@ -1,18 +1,24 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
 export default function DashboardPage() {
   const router = useRouter();
+  const [userRole, setUserRole] = useState<string>('user');
 
   useEffect(() => {
     // Verificar autenticación
     const isAuth = localStorage.getItem('isAuthenticated');
     if (!isAuth) {
       router.push('/login');
+      return;
     }
+
+    // Obtener el rol del usuario
+    const role = localStorage.getItem('userRole') || 'user';
+    setUserRole(role);
   }, [router]);
 
   const handleLogout = () => {
@@ -191,70 +197,72 @@ export default function DashboardPage() {
             </div>
           </button>
 
-          {/* Card 3: Administración */}
-          <button
-            onClick={() => router.push('/admin')}
-            className="group bg-white dark:bg-zinc-800 rounded-2xl shadow-xl p-8 hover:shadow-2xl transition-all duration-300 hover:scale-105 text-left"
-          >
-            <div className="flex flex-col items-center text-center">
-              {/* Icon */}
-              <div className="w-20 h-20 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center mb-6 group-hover:bg-purple-200 dark:group-hover:bg-purple-900/50 transition-colors">
-                <svg
-                  className="w-10 h-10 text-purple-600 dark:text-purple-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                  />
-                </svg>
+          {/* Card 3: Administración - Only visible to admins */}
+          {userRole === 'admin' && (
+            <button
+              onClick={() => router.push('/admin')}
+              className="group bg-white dark:bg-zinc-800 rounded-2xl shadow-xl p-8 hover:shadow-2xl transition-all duration-300 hover:scale-105 text-left"
+            >
+              <div className="flex flex-col items-center text-center">
+                {/* Icon */}
+                <div className="w-20 h-20 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center mb-6 group-hover:bg-purple-200 dark:group-hover:bg-purple-900/50 transition-colors">
+                  <svg
+                    className="w-10 h-10 text-purple-600 dark:text-purple-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                    />
+                  </svg>
+                </div>
+
+                {/* Title */}
+                <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-3">
+                  Administración
+                </h3>
+
+                {/* Description */}
+                <p className="text-zinc-600 dark:text-zinc-400 mb-4">
+                  Visualiza estadísticas y métricas del sistema de gestión de facturas
+                </p>
+
+                {/* Features */}
+                <ul className="text-sm text-zinc-500 dark:text-zinc-500 space-y-2 mb-6">
+                  <li className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Facturas analizadas
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Facturas validadas
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Facturas modificadas
+                  </li>
+                </ul>
+
+                {/* Button */}
+                <div className="inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 font-semibold group-hover:gap-3 transition-all">
+                  Ir a Administración
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
               </div>
-
-              {/* Title */}
-              <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-3">
-                Administración
-              </h3>
-
-              {/* Description */}
-              <p className="text-zinc-600 dark:text-zinc-400 mb-4">
-                Visualiza estadísticas y métricas del sistema de gestión de facturas
-              </p>
-
-              {/* Features */}
-              <ul className="text-sm text-zinc-500 dark:text-zinc-500 space-y-2 mb-6">
-                <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Facturas analizadas
-                </li>
-                <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Facturas validadas
-                </li>
-                <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Facturas modificadas
-                </li>
-              </ul>
-
-              {/* Button */}
-              <div className="inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 font-semibold group-hover:gap-3 transition-all">
-                Ir a Administración
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </div>
-          </button>
+            </button>
+          )}
         </div>
 
         {/* Stats Section (Optional) */}

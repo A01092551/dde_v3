@@ -73,3 +73,101 @@ async def signup(user_data: dict):
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="Signup not implemented yet"
     )
+
+@router.get("/users", response_model=dict)
+async def get_users(search: str = None):
+    """
+    Obtener lista de usuarios (requiere rol admin)
+    """
+    try:
+        user_db = get_user_db()
+        
+        if search:
+            users = user_db.search_users(search)
+        else:
+            users = user_db.get_all_users()
+        
+        # Remover contraseñas de la respuesta
+        for user in users:
+            user.pop('password', None)
+        
+        return {
+            "success": True,
+            "users": users
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error obteniendo usuarios: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get users: {str(e)}"
+        )
+
+@router.put("/users/{user_id}/role", response_model=dict)
+async def update_user_role(user_id: int, role_data: dict):
+    """
+    Actualizar el rol de un usuario (requiere rol admin)
+    """
+    try:
+        role = role_data.get('role')
+        if not role or role not in ['user', 'admin']:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Role must be 'user' or 'admin'"
+            )
+        
+        user_db = get_user_db()
+        success = user_db.update_user_role(user_id, role)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        logger.info(f"✅ Rol actualizado para usuario {user_id} a {role}")
+        
+        return {
+            "success": True,
+            "message": f"User role updated to {role}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error actualizando rol: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update role: {str(e)}"
+        )
+
+@router.delete("/users/{user_id}", response_model=dict)
+async def delete_user(user_id: int):
+    """
+    Eliminar un usuario (requiere rol admin)
+    """
+    try:
+        user_db = get_user_db()
+        success = user_db.delete_user(user_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        logger.info(f"✅ Usuario {user_id} eliminado")
+        
+        return {
+            "success": True,
+            "message": "User deleted successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error eliminando usuario: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete user: {str(e)}"
+        )
