@@ -190,6 +190,22 @@ export default function FacturasPage() {
     setIsDeleteModalOpen(false);
   };
 
+  const handleNextFactura = () => {
+    if (!selectedFactura) return;
+    const currentIdx = facturas.findIndex(f => f._id === selectedFactura._id);
+    if (currentIdx < facturas.length - 1) {
+      openDrawer(facturas[currentIdx + 1]);
+    }
+  };
+
+  const handlePrevFactura = () => {
+    if (!selectedFactura) return;
+    const currentIdx = facturas.findIndex(f => f._id === selectedFactura._id);
+    if (currentIdx > 0) {
+      openDrawer(facturas[currentIdx - 1]);
+    }
+  };
+
   const handleSaveChanges = async () => {
     if (!editedData) return;
 
@@ -444,13 +460,13 @@ export default function FacturasPage() {
       )}
 
       {/* Drawer */}
-      <div className={`fixed top-0 right-0 h-full w-full md:w-3/4 lg:w-2/3 xl:w-1/2 bg-white dark:bg-zinc-900 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out overflow-y-auto ${
+      <div className={`fixed top-0 right-0 h-full w-full bg-white dark:bg-zinc-900 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${
         isDrawerOpen ? 'translate-x-0' : 'translate-x-full'
       }`}>
         {editedData && (
           <div className="h-full flex flex-col">
             {/* Drawer Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-700 dark:to-blue-800 text-white p-6 sticky top-0 z-10">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-700 dark:to-blue-800 text-white p-6">
               <div className="flex justify-between items-start mb-4">
                 <div className="flex-1">
                   <h2 className="text-2xl font-bold mb-2">
@@ -492,12 +508,11 @@ export default function FacturasPage() {
               )}
             </div>
 
-            {/* Drawer Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              
-              {/* Document Preview Section */}
-              {editedData.metadata.s3Key && (
-                <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-6">
+            {/* Drawer Content - 2 Columns */}
+            <div className="flex-1 overflow-hidden">
+              <div className="h-full grid grid-cols-1 lg:grid-cols-2 gap-0">
+                {/* Columna Izquierda: Vista Previa de la Factura */}
+                <div className="bg-zinc-50 dark:bg-zinc-800 p-6 overflow-y-auto">
                   <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -505,36 +520,49 @@ export default function FacturasPage() {
                     </svg>
                     Documento Original
                   </h3>
-                  <div className="bg-white dark:bg-zinc-900 rounded-lg border-2 border-zinc-200 dark:border-zinc-700 overflow-hidden">
-                    {loadingImage ? (
-                      <div className="flex items-center justify-center h-[500px]">
-                        <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                      </div>
-                    ) : signedImageUrl ? (
-                      editedData.metadata.fileName.toLowerCase().endsWith('.pdf') ? (
-                        <iframe
-                          src={signedImageUrl}
-                          className="w-full h-[500px]"
-                          title="Invoice PDF"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center p-4 bg-zinc-100 dark:bg-zinc-900">
-                          <img
-                            src={signedImageUrl}
-                            alt="Invoice"
-                            className="max-w-full max-h-[500px] object-contain rounded"
-                          />
+                  
+                  {editedData.metadata.s3Key ? (
+                    <div className="bg-white dark:bg-zinc-900 rounded-lg border-2 border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                      {loadingImage ? (
+                        <div className="flex items-center justify-center h-[calc(100vh-300px)]">
+                          <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
                         </div>
-                      )
-                    ) : (
-                      <div className="flex items-center justify-center h-[500px] text-zinc-500">
-                        No se pudo cargar la imagen
+                      ) : signedImageUrl ? (
+                        editedData.metadata.fileName.toLowerCase().endsWith('.pdf') ? (
+                          <iframe
+                            src={signedImageUrl}
+                            className="w-full h-[calc(100vh-300px)]"
+                            title="Invoice PDF"
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center p-4 bg-zinc-100 dark:bg-zinc-900">
+                            <img
+                              src={signedImageUrl}
+                              alt="Invoice"
+                              className="max-w-full max-h-[calc(100vh-300px)] object-contain rounded"
+                            />
+                          </div>
+                        )
+                      ) : (
+                        <div className="flex items-center justify-center h-[calc(100vh-300px)] text-zinc-500">
+                          No se pudo cargar la imagen
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-white dark:bg-zinc-900 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center h-[calc(100vh-300px)]">
+                      <div className="text-center text-zinc-500 dark:text-zinc-400">
+                        <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p>No hay imagen disponible</p>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                  
                   <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-4">
                     <span>📄 {editedData.metadata.fileName}</span>
                     {editedData.metadata.fileSize && (
@@ -542,10 +570,10 @@ export default function FacturasPage() {
                     )}
                   </div>
                 </div>
-              )}
 
-              {/* Editable Data Section */}
-              <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-6">
+                {/* Columna Derecha: Datos Editables */}
+                <div className="bg-white dark:bg-zinc-900 p-6 overflow-y-auto">
+              <div className="space-y-6">
                 <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -817,48 +845,77 @@ export default function FacturasPage() {
                   </div>
                 </div>
               </div>
+                </div>
+              </div>
             </div>
 
             {/* Drawer Footer */}
-            <div className="bg-zinc-100 dark:bg-zinc-800 p-6 border-t border-zinc-200 dark:border-zinc-700 sticky bottom-0">
-              <div className="flex gap-4">
-                <button
-                  onClick={handleDeleteClick}
-                  className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition flex items-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  Eliminar
-                </button>
-                <button
-                  onClick={closeDrawer}
-                  className="flex-1 px-6 py-3 bg-zinc-300 dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold rounded-lg hover:bg-zinc-400 dark:hover:bg-zinc-600 transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleSaveChanges}
-                  disabled={isSaving}
-                  className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
-                >
-                  {isSaving ? (
-                    <>
-                      <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      Guardar Cambios
-                    </>
-                  )}
-                </button>
+            <div className="bg-zinc-100 dark:bg-zinc-800 p-6 border-t border-zinc-200 dark:border-zinc-700">
+              <div className="flex justify-between items-center gap-4">
+                {/* Navegación - Izquierda */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handlePrevFactura}
+                    disabled={!selectedFactura || facturas.findIndex(f => f._id === selectedFactura._id) === 0}
+                    className="px-4 py-3 bg-zinc-300 dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold rounded-lg hover:bg-zinc-400 dark:hover:bg-zinc-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Anterior
+                  </button>
+                  <button
+                    onClick={handleNextFactura}
+                    disabled={!selectedFactura || facturas.findIndex(f => f._id === selectedFactura._id) === facturas.length - 1}
+                    className="px-4 py-3 bg-zinc-300 dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold rounded-lg hover:bg-zinc-400 dark:hover:bg-zinc-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    Siguiente
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Acciones - Derecha */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleDeleteClick}
+                    className="px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition flex items-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Eliminar
+                  </button>
+                  <button
+                    onClick={closeDrawer}
+                    className="px-6 py-3 bg-zinc-300 dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold rounded-lg hover:bg-zinc-400 dark:hover:bg-zinc-600 transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSaveChanges}
+                    disabled={isSaving}
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
+                  >
+                    {isSaving ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Guardando...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Guardar Cambios
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

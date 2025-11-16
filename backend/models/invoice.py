@@ -29,6 +29,7 @@ class Metadata(BaseModel):
     model: Optional[str] = "gpt-4o"
     validatedAt: Optional[str] = None
     validatedBy: Optional[str] = None
+    wasModified: Optional[bool] = False
     s3Url: Optional[str] = None
     s3Key: Optional[str] = None
 

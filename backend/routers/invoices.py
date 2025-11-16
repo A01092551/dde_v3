@@ -1,10 +1,12 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, status, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException, status, Query, Form
 from fastapi.responses import JSONResponse
 from models.invoice import InvoiceCreate, InvoiceResponse
 from services.openai_service import OpenAIService
 from services.invoice_service import InvoiceService
+from services.s3_services import S3Service
 from datetime import datetime
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -63,17 +65,50 @@ async def extract_invoice(file: UploadFile = File(...)):
         )
 
 @router.post("/validate", response_model=InvoiceResponse)
-async def validate_invoice(invoice: InvoiceCreate):
+async def validate_invoice(
+    invoice_data: str = Form(...),
+    file: UploadFile = File(...),
+    validatedBy: str = Form(None),
+    wasModified: bool = Form(False)
+):
     """
-    Validar y guardar factura en MongoDB
+    Validar y guardar factura en MongoDB con archivo original en S3
     """
     try:
-        logger.info(f"📥 Validando factura: {invoice.numeroFactura}")
+        # Parsear los datos de la factura desde JSON
+        invoice_dict = json.loads(invoice_data)
+        invoice = InvoiceCreate(**invoice_dict)
+        
+        logger.info(f"📥 Validando factura: {invoice.numeroFactura} por {validatedBy}")
+        
+        # Subir archivo a S3
+        s3_service = S3Service()
+        if s3_service.client:  # Solo si S3 está configurado
+            try:
+                file_content = await file.read()
+                s3_data = s3_service.upload_file(
+                    file_content=file_content,
+                    file_name=file.filename,
+                    content_type=file.content_type
+                )
+                
+                # Agregar información de S3 a metadata
+                invoice.metadata.s3Key = s3_data['s3Key']
+                invoice.metadata.s3Url = s3_data['s3Url']
+                logger.info(f"✅ Archivo subido a S3: {s3_data['s3Key']}")
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo subir a S3: {e}")
+                # Continuar sin S3 si falla
+        
+        # Agregar metadata de validación
+        invoice.metadata.validatedAt = datetime.utcnow().isoformat()
+        invoice.metadata.validatedBy = validatedBy
+        invoice.metadata.wasModified = wasModified
         
         invoice_service = InvoiceService()
         invoice_id = await invoice_service.create_invoice(invoice)
         
-        logger.info(f"✅ Factura guardada: {invoice_id}")
+        logger.info(f"✅ Factura guardada: {invoice_id} (Modificada: {wasModified})")
         
         return InvoiceResponse(
             message="Factura validada y guardada exitosamente",
@@ -263,4 +298,25 @@ async def delete_invoice(invoice_id: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al eliminar la factura: {str(e)}"
+        )
+
+@router.get("/stats/summary", response_model=dict)
+async def get_stats():
+    """
+    Obtener estadísticas del sistema
+    """
+    try:
+        logger.info("📊 Obteniendo estadísticas del sistema")
+        
+        invoice_service = InvoiceService()
+        stats = await invoice_service.get_statistics()
+        
+        logger.info(f"✅ Estadísticas obtenidas: {stats}")
+        return stats
+        
+    except Exception as e:
+        logger.error(f"❌ Error al obtener estadísticas: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al obtener estadísticas: {str(e)}"
         )

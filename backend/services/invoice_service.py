@@ -108,3 +108,90 @@ class InvoiceService:
         except Exception as e:
             logger.error(f"❌ Error al eliminar factura: {e}")
             raise
+    
+    async def get_statistics(self) -> dict:
+        """Obtener estadísticas del sistema"""
+        try:
+            # Total de facturas
+            total = await self.collection.count_documents({})
+            
+            # Facturas validadas (tienen validatedAt)
+            validated = await self.collection.count_documents({
+                "metadata.validatedAt": {"$exists": True, "$ne": None}
+            })
+            
+            # Facturas modificadas (wasModified = true)
+            modified = await self.collection.count_documents({
+                "metadata.wasModified": True
+            })
+            
+            # Facturas con archivo en S3
+            with_s3 = await self.collection.count_documents({
+                "metadata.s3Key": {"$exists": True, "$ne": None}
+            })
+            
+            # Facturas por usuario (top 5)
+            pipeline = [
+                {"$match": {"metadata.validatedBy": {"$exists": True, "$ne": None}}},
+                {"$group": {
+                    "_id": "$metadata.validatedBy",
+                    "count": {"$sum": 1}
+                }},
+                {"$sort": {"count": -1}},
+                {"$limit": 5}
+            ]
+            users_cursor = self.collection.aggregate(pipeline)
+            users_stats = await users_cursor.to_list(length=5)
+            
+            # Facturas por mes (últimos 6 meses)
+            pipeline_monthly = [
+                {"$match": {"metadata.validatedAt": {"$exists": True}}},
+                {"$project": {
+                    "month": {"$substr": ["$metadata.validatedAt", 0, 7]}  # YYYY-MM
+                }},
+                {"$group": {
+                    "_id": "$month",
+                    "count": {"$sum": 1}
+                }},
+                {"$sort": {"_id": -1}},
+                {"$limit": 6}
+            ]
+            monthly_cursor = self.collection.aggregate(pipeline_monthly)
+            monthly_stats = await monthly_cursor.to_list(length=6)
+            
+            # Historial de eventos (últimas 20 facturas validadas)
+            history_cursor = self.collection.find(
+                {"metadata.validatedAt": {"$exists": True, "$ne": None}},
+                {
+                    "numeroFactura": 1,
+                    "metadata.validatedBy": 1,
+                    "metadata.validatedAt": 1,
+                    "metadata.wasModified": 1
+                }
+            ).sort("metadata.validatedAt", -1).limit(20)
+            
+            history = await history_cursor.to_list(length=20)
+            
+            # Formatear historial
+            history_formatted = []
+            for item in history:
+                history_formatted.append({
+                    "invoiceNumber": item.get("numeroFactura", "N/A"),
+                    "user": item.get("metadata", {}).get("validatedBy", "Desconocido"),
+                    "wasModified": item.get("metadata", {}).get("wasModified", False),
+                    "timestamp": item.get("metadata", {}).get("validatedAt", ""),
+                    "action": "validated"
+                })
+            
+            return {
+                "total": total,
+                "validated": validated,
+                "modified": modified,
+                "with_s3": with_s3,
+                "by_user": users_stats,
+                "by_month": monthly_stats,
+                "history": history_formatted
+            }
+        except Exception as e:
+            logger.error(f"❌ Error al obtener estadísticas: {e}")
+            raise

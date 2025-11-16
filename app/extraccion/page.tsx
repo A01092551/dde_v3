@@ -239,6 +239,7 @@ export default function ExtraccionPage() {
       setIsEditing(false);
       setEditedData(null);
       setError('');
+      setSuccessMessage('');
     }
   };
 
@@ -248,6 +249,7 @@ export default function ExtraccionPage() {
       setIsEditing(false);
       setEditedData(null);
       setError('');
+      setSuccessMessage('');
     }
   };
 
@@ -267,13 +269,24 @@ export default function ExtraccionPage() {
     setSuccessMessage('');
 
     try {
+      // Obtener email del usuario del localStorage
+      const userEmail = localStorage.getItem('userEmail') || 'unknown';
+      
+      // Determinar si la factura fue modificada
+      const wasModified = isEditing || editedData !== null;
+      
+      // Crear FormData para enviar archivo + datos
+      const formData = new FormData();
+      formData.append('file', currentInvoice.file);
+      formData.append('invoice_data', JSON.stringify(currentInvoice.extractedData));
+      formData.append('validatedBy', userEmail);
+      formData.append('wasModified', wasModified.toString());
+      
       const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.VALIDATE_INVOICE);
+      
       const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(currentInvoice.extractedData),
+        body: formData, // No incluir Content-Type header, el navegador lo establece automáticamente con boundary
       });
 
       const data = await response.json();
@@ -291,6 +304,10 @@ export default function ExtraccionPage() {
           ? { ...inv, isValidated: true }
           : inv
       ));
+      
+      // Limpiar estado de edición
+      setIsEditing(false);
+      setEditedData(null);
       
       setSuccessMessage(`✅ Factura validada y guardada exitosamente (ID: ${data.id})`);
     } catch (err) {
@@ -341,20 +358,28 @@ export default function ExtraccionPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Column 1: Upload & Preview Section */}
+      <main className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+          {/* Sección 1: Cargar Facturas */}
           <div className="bg-white dark:bg-zinc-800 rounded-2xl shadow-xl p-6">
             <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-6">
-              �️ Vista Previa
+              📂 Cargar Facturas
             </h2>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Drag & Drop Area */}
-              <div
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Columna Izquierda: Botón y Zona de Arrastre */}
+              <div>
+                <form onSubmit={handleSubmit}>
+                  {/* Drag & Drop Area */}
+                  <div
+                    onDragEnter={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                    className={`relative border-2 border-dashed rounded-xl p-6 transition-colors ${
+                      dragActive
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-zinc-300 dark:border-zinc-600 hover:border-zinc-400 dark:hover:border-zinc-500'
+                    }`}
                 onDrop={handleDrop}
                 className={`relative border-2 border-dashed rounded-xl p-6 transition-colors ${
                   dragActive
@@ -401,72 +426,98 @@ export default function ExtraccionPage() {
                     </div>
                   </div>
                 </div>
-
-                {/* Lista de facturas cargadas */}
-                {invoices.length > 0 && (
-                  <div className="mt-4 space-y-2 max-h-40 overflow-y-auto">
-                    {invoices.map((invoice, index) => (
-                      <div 
-                        key={index}
-                        className={`flex items-center justify-between p-2 rounded-lg border-2 transition ${
-                          index === currentIndex 
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                            : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <button
-                            type="button"
-                            onClick={() => setCurrentIndex(index)}
-                            className="flex items-center gap-2 flex-1 min-w-0 text-left"
-                          >
-                            {invoice.isValidated ? (
-                              <span className="text-green-500">✅</span>
-                            ) : invoice.isProcessed ? (
-                              <span className="text-blue-500">📊</span>
-                            ) : invoice.error ? (
-                              <span className="text-red-500">❌</span>
-                            ) : (
-                              <span className="text-zinc-400">📄</span>
-                            )}
-                            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate">
-                              {invoice.file.name}
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveInvoice(index)}
-                            className="text-red-500 hover:text-red-700 p-1"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {/* Error Message */}
               {error && (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+                <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
                   {error}
                 </div>
               )}
+              </form>
+            </div>
 
-              {/* Success Message */}
-              {successMessage && (
-                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 px-4 py-3 rounded-lg text-sm">
-                  {successMessage}
+            {/* Columna Derecha: Lista de Facturas */}
+            <div>
+              <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4">
+                📋 Facturas Cargadas ({invoices.length})
+              </h3>
+              
+              {invoices.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-64 text-center bg-zinc-50 dark:bg-zinc-900 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-600">
+                  <svg className="w-16 h-16 text-zinc-300 dark:text-zinc-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-zinc-500 dark:text-zinc-400">
+                    No hay facturas cargadas
+                  </p>
+                  <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-2">
+                    Selecciona o arrastra archivos para comenzar
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {invoices.map((invoice, index) => (
+                    <div 
+                      key={index}
+                      className={`flex items-center justify-between p-3 rounded-lg border-2 transition cursor-pointer ${
+                        index === currentIndex 
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                          : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300'
+                      }`}
+                      onClick={() => {
+                        setCurrentIndex(index);
+                        setSuccessMessage('');
+                        setError('');
+                        setIsEditing(false);
+                      }}
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {invoice.isValidated ? (
+                          <span className="text-green-500 text-xl">✅</span>
+                        ) : invoice.isProcessed ? (
+                          <span className="text-blue-500 text-xl">📊</span>
+                        ) : invoice.error ? (
+                          <span className="text-red-500 text-xl">❌</span>
+                        ) : (
+                          <span className="text-zinc-400 text-xl">📄</span>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate">
+                            {invoice.file.name}
+                          </p>
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                            {(invoice.file.size / 1024).toFixed(2)} KB
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveInvoice(index);
+                        }}
+                        className="text-red-500 hover:text-red-700 p-1"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
 
-            </form>
-
-            {/* Divider */}
-            <div className="my-6 border-t border-zinc-200 dark:border-zinc-700"></div>
+        {/* Sección 2: Vista Previa y Datos Extraídos */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Columna Izquierda: Vista Previa */}
+          <div className="bg-white dark:bg-zinc-800 rounded-2xl shadow-xl p-6">
+            <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-6">
+              👁️ Vista Previa
+            </h2>
 
             {/* Preview Section - Fixed Height */}
             <div className="h-[600px] bg-zinc-50 dark:bg-zinc-900 rounded-lg p-4">
@@ -555,7 +606,7 @@ export default function ExtraccionPage() {
             <div className="mt-6">
               <button
                 onClick={handleSubmit}
-                disabled={!currentInvoice || currentInvoice.isProcessed || loading}
+                disabled={invoices.length === 0 || loading || invoices.every(inv => inv.isProcessed)}
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-400 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors duration-200 flex items-center justify-center"
               >
                 {loading ? (
@@ -566,10 +617,10 @@ export default function ExtraccionPage() {
                     </svg>
                     Procesando...
                   </>
-                ) : currentInvoice?.isProcessed ? (
-                  '✅ Ya Procesada'
+                ) : invoices.every(inv => inv.isProcessed) && invoices.length > 0 ? (
+                  '✅ Todas Procesadas'
                 ) : (
-                  '🔍 Extraer Datos'
+                  `🔍 Extraer Datos (${invoices.filter(inv => !inv.isProcessed).length} pendiente${invoices.filter(inv => !inv.isProcessed).length !== 1 ? 's' : ''})`
                 )}
               </button>
             </div>
@@ -602,7 +653,7 @@ export default function ExtraccionPage() {
               </div>
             )}
 
-            {loading && (
+            {loading && !currentInvoice?.extractedData && (
               <div className="flex flex-col items-center justify-center h-96">
                 <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 rounded-lg p-6">
                   <svg className="animate-spin h-12 w-12 text-blue-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
