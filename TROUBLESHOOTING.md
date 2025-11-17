@@ -52,10 +52,10 @@ MongoServerSelectionError: SSL routines:ssl3_read_bytes:tlsv1 alert internal err
 
 ```bash
 # OpenAI API Key
-OPENAI_API_KEY=sk-proj-TU_KEY_COMPLETA_AQUI
+OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 # MongoDB Atlas Connection
-MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
 
 # MongoDB Database Name
 MONGODB_DB=facturas_db
@@ -120,7 +120,7 @@ node test-mongodb-connection.js
 
 El formato correcto es:
 ```
-mongodb+srv://USERNAME:PASSWORD@cluster.mongodb.net/?retryWrites=true&w=majority&appName=AppName
+mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority&appName=AppName
 ```
 
 **Errores comunes:**

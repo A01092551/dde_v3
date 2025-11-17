@@ -121,7 +121,7 @@ Ensure your IAM user has this policy:
 #### **Solution:**
 1. **Check `.env.local`:**
    ```bash
-   MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/
+   MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/
    ```
 
 2. **Verify MongoDB Atlas:**

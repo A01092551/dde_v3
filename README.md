@@ -112,17 +112,17 @@ Edita `backend/.env` con tus credenciales:
 
 ```env
 # OpenAI API Key
-OPENAI_API_KEY=tu-api-key-aqui
+OPENAI_API_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 # MongoDB Connection
-MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/?appName=MyApp
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?appName=MyApp
 MONGODB_DB=facturas_db
 
 # AWS S3 (opcional)
 AWS_REGION=us-east-2
-AWS_ACCESS_KEY_ID=tu-access-key
-AWS_SECRET_ACCESS_KEY=tu-secret-key
-AWS_S3_BUCKET_NAME=tu-bucket
+AWS_ACCESS_KEY_ID=XXXXXXXXXXXXXXXXXXXX
+AWS_SECRET_ACCESS_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+AWS_S3_BUCKET_NAME=my-bucket-name
 
 # Server Config
 HOST=0.0.0.0

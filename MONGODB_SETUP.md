@@ -15,7 +15,7 @@ Agrega las siguientes variables a tu archivo `.env.local`:
 
 ```env
 # MongoDB Connection
-MONGODB_URI=mongodb+srv://anuar2712_db_user:<db_password>@facturascluster.tb0zlhs.mongodb.net/?appName=Facturascluster
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?appName=<AppName>
 MONGODB_DB=facturas_db
 ```
 
