@@ -20,17 +20,56 @@ async def extract_invoice(file: UploadFile = File(...)):
     try:
         logger.info(f"📥 Recibiendo archivo: {file.filename}")
         
+        # Validar nombre de archivo
+        if not file.filename or file.filename.strip() == "":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Nombre de archivo inválido"
+            )
+        
+        # Sanitizar nombre de archivo (prevenir path traversal)
+        if ".." in file.filename or "/" in file.filename or "\\" in file.filename:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Nombre de archivo contiene caracteres no permitidos"
+            )
+        
         # Validar tipo de archivo
         valid_types = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp']
         if file.content_type not in valid_types:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El archivo debe ser un PDF o una imagen (PNG, JPG, WEBP)"
+                detail=f"Tipo de archivo no permitido: {file.content_type}. Debe ser PDF o imagen (PNG, JPG, WEBP)"
+            )
+        
+        # Validar extensión de archivo
+        valid_extensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp']
+        file_ext = '.' + file.filename.lower().split('.')[-1] if '.' in file.filename else ''
+        if file_ext not in valid_extensions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Extensión de archivo no permitida: {file_ext}"
             )
         
         # Leer contenido del archivo
         file_content = await file.read()
-        logger.info(f"📄 Archivo leído: {len(file_content)} bytes")
+        file_size = len(file_content)
+        logger.info(f"📄 Archivo leído: {file_size} bytes")
+        
+        # Validar tamaño de archivo (máximo 50MB)
+        MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+        if file_size > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Archivo demasiado grande ({file_size / 1024 / 1024:.2f}MB). Máximo permitido: 50MB"
+            )
+        
+        # Validar que el archivo no esté vacío
+        if file_size == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El archivo está vacío"
+            )
         
         # Extraer datos usando OpenAI
         openai_service = OpenAIService()
@@ -57,8 +96,14 @@ async def extract_invoice(file: UploadFile = File(...)):
         
     except HTTPException:
         raise
+    except ValueError as e:
+        logger.error(f"❌ Error de validación: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error de validación: {str(e)}"
+        )
     except Exception as e:
-        logger.error(f"❌ Error al extraer factura: {e}")
+        logger.error(f"❌ Error al extraer factura: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al extraer datos de la factura: {str(e)}"
@@ -75,9 +120,53 @@ async def validate_invoice(
     Validar y guardar factura en MongoDB con archivo original en S3
     """
     try:
+        # Validar que se proporcionaron los datos necesarios
+        if not invoice_data or not invoice_data.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Datos de factura son requeridos"
+            )
+        
+        if not file or not file.filename:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Archivo es requerido"
+            )
+        
+        # Validar tamaño del archivo
+        file_content = await file.read()
+        file_size = len(file_content)
+        MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+        
+        if file_size > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Archivo demasiado grande ({file_size / 1024 / 1024:.2f}MB). Máximo: 50MB"
+            )
+        
+        if file_size == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El archivo está vacío"
+            )
+        
         # Parsear los datos de la factura desde JSON
-        invoice_dict = json.loads(invoice_data)
-        invoice = InvoiceCreate(**invoice_dict)
+        try:
+            invoice_dict = json.loads(invoice_data)
+        except json.JSONDecodeError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"JSON inválido: {str(e)}"
+            )
+        
+        # Validar con Pydantic (incluye todas las validaciones del modelo)
+        try:
+            invoice = InvoiceCreate(**invoice_dict)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Error de validación: {str(e)}"
+            )
         
         logger.info(f"📥 Validando factura: {invoice.numeroFactura} por {validatedBy}")
         
@@ -85,7 +174,7 @@ async def validate_invoice(
         s3_service = S3Service()
         if s3_service.client:  # Solo si S3 está configurado
             try:
-                file_content = await file.read()
+                # Ya leímos el archivo antes, usar file_content existente
                 s3_data = s3_service.upload_file(
                     file_content=file_content,
                     file_name=file.filename,
@@ -116,14 +205,28 @@ async def validate_invoice(
             numeroFactura=invoice.numeroFactura
         )
         
+    except HTTPException:
+        raise
     except ValueError as e:
-        # Error de duplicado
+        # Error de duplicado o validación
+        if "Ya existe" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(e)
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Error de validación: {str(e)}"
+            )
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ Error al parsear JSON: {e}")
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e)
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"JSON inválido: {str(e)}"
         )
     except Exception as e:
-        logger.error(f"❌ Error al validar factura: {e}")
+        logger.error(f"❌ Error al validar factura: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al validar la factura: {str(e)}"

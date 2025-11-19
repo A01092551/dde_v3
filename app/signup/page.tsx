@@ -11,7 +11,70 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{
+    name?: string;
+    email?: string;
+    password?: string;
+    confirmPassword?: string;
+  }>({});
+  const [passwordStrength, setPasswordStrength] = useState(0);
   const router = useRouter();
+
+  // Validate email format
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  // Calculate password strength
+  const calculatePasswordStrength = (pwd: string): number => {
+    let strength = 0;
+    if (pwd.length >= 8) strength++;
+    if (pwd.length >= 12) strength++;
+    if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) strength++;
+    if (/\d/.test(pwd)) strength++;
+    if (/[^a-zA-Z0-9]/.test(pwd)) strength++;
+    return Math.min(strength, 4);
+  };
+
+  // Real-time field validation
+  const validateField = (field: string, value: string) => {
+    const errors = { ...fieldErrors };
+
+    switch (field) {
+      case 'name':
+        if (value.trim().length < 2) {
+          errors.name = 'Name must be at least 2 characters';
+        } else {
+          delete errors.name;
+        }
+        break;
+      case 'email':
+        if (!validateEmail(value)) {
+          errors.email = 'Please enter a valid email address';
+        } else {
+          delete errors.email;
+        }
+        break;
+      case 'password':
+        if (value.length < 6) {
+          errors.password = 'Password must be at least 6 characters';
+        } else {
+          delete errors.password;
+        }
+        setPasswordStrength(calculatePasswordStrength(value));
+        break;
+      case 'confirmPassword':
+        if (value !== password) {
+          errors.confirmPassword = 'Passwords do not match';
+        } else {
+          delete errors.confirmPassword;
+        }
+        break;
+    }
+
+    setFieldErrors(errors);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,14 +88,33 @@ export default function SignupPage() {
       return;
     }
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
+    if (name.trim().length < 2) {
+      setError('Name must be at least 2 characters');
+      setLoading(false);
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      setError('Please enter a valid email address');
       setLoading(false);
       return;
     }
 
     if (password.length < 6) {
       setError('Password must be at least 6 characters');
+      setLoading(false);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
+
+    // Check if there are any field errors
+    if (Object.keys(fieldErrors).length > 0) {
+      setError('Please fix all errors before submitting');
       setLoading(false);
       return;
     }
@@ -112,11 +194,22 @@ export default function SignupPage() {
                 id="name"
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                onChange={(e) => {
+                  setName(e.target.value);
+                  validateField('name', e.target.value);
+                }}
+                onBlur={(e) => validateField('name', e.target.value)}
+                className={`w-full px-4 py-3 rounded-lg border ${
+                  fieldErrors.name
+                    ? 'border-red-500 focus:ring-red-500'
+                    : 'border-zinc-300 dark:border-zinc-600 focus:ring-blue-500'
+                } bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:border-transparent outline-none transition`}
                 placeholder="John Doe"
                 disabled={loading}
               />
+              {fieldErrors.name && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{fieldErrors.name}</p>
+              )}
             </div>
 
             {/* Email */}
@@ -131,11 +224,22 @@ export default function SignupPage() {
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (e.target.value) validateField('email', e.target.value);
+                }}
+                onBlur={(e) => validateField('email', e.target.value)}
+                className={`w-full px-4 py-3 rounded-lg border ${
+                  fieldErrors.email
+                    ? 'border-red-500 focus:ring-red-500'
+                    : 'border-zinc-300 dark:border-zinc-600 focus:ring-blue-500'
+                } bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:border-transparent outline-none transition`}
                 placeholder="you@example.com"
                 disabled={loading}
               />
+              {fieldErrors.email && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{fieldErrors.email}</p>
+              )}
             </div>
 
             {/* Password */}
@@ -150,11 +254,51 @@ export default function SignupPage() {
                 id="password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  validateField('password', e.target.value);
+                  if (confirmPassword) validateField('confirmPassword', confirmPassword);
+                }}
+                onBlur={(e) => validateField('password', e.target.value)}
+                className={`w-full px-4 py-3 rounded-lg border ${
+                  fieldErrors.password
+                    ? 'border-red-500 focus:ring-red-500'
+                    : 'border-zinc-300 dark:border-zinc-600 focus:ring-blue-500'
+                } bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:border-transparent outline-none transition`}
                 placeholder="••••••••"
                 disabled={loading}
               />
+              {fieldErrors.password && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{fieldErrors.password}</p>
+              )}
+              {password && (
+                <div className="mt-2">
+                  <div className="flex gap-1 mb-1">
+                    {[...Array(4)].map((_, i) => (
+                      <div
+                        key={i}
+                        className={`h-1 flex-1 rounded ${
+                          i < passwordStrength
+                            ? passwordStrength <= 1
+                              ? 'bg-red-500'
+                              : passwordStrength === 2
+                              ? 'bg-yellow-500'
+                              : passwordStrength === 3
+                              ? 'bg-blue-500'
+                              : 'bg-green-500'
+                            : 'bg-zinc-300 dark:bg-zinc-600'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                    {passwordStrength <= 1 && 'Weak password'}
+                    {passwordStrength === 2 && 'Fair password'}
+                    {passwordStrength === 3 && 'Good password'}
+                    {passwordStrength === 4 && 'Strong password'}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Confirm Password */}
@@ -169,11 +313,22 @@ export default function SignupPage() {
                 id="confirmPassword"
                 type="password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  validateField('confirmPassword', e.target.value);
+                }}
+                onBlur={(e) => validateField('confirmPassword', e.target.value)}
+                className={`w-full px-4 py-3 rounded-lg border ${
+                  fieldErrors.confirmPassword
+                    ? 'border-red-500 focus:ring-red-500'
+                    : 'border-zinc-300 dark:border-zinc-600 focus:ring-blue-500'
+                } bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:border-transparent outline-none transition`}
                 placeholder="••••••••"
                 disabled={loading}
               />
+              {fieldErrors.confirmPassword && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{fieldErrors.confirmPassword}</p>
+              )}
             </div>
 
             {/* Error Message */}

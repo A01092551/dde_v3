@@ -1,20 +1,26 @@
-from openai import OpenAI
+from openai import OpenAI, APIError, APIConnectionError, RateLimitError, APITimeoutError
 from config import settings
 import json
 import re
 import logging
 import os
+import time
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
 class OpenAIService:
     def __init__(self):
+        if not settings.OPENAI_API_KEY:
+            raise ValueError("OPENAI_API_KEY no está configurada")
+        
         self.client = OpenAI(
             api_key=settings.OPENAI_API_KEY,
-            max_retries=2,
-            timeout=60.0
+            max_retries=3,
+            timeout=120.0
         )
+        self.max_retries = 3
+        self.retry_delay = 2  # seconds
     
     async def extract_from_pdf(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """Extraer datos de un PDF - detecta si es imagen y usa Vision API"""
@@ -65,26 +71,28 @@ class OpenAIService:
                     base64_image = base64.b64encode(img_byte_arr).decode('utf-8')
                     
                     logger.info("📤 Enviando a Vision API...")
-                    response = self.client.chat.completions.create(
-                        model='gpt-4o',
-                        messages=[
-                            {
-                                'role': 'user',
-                                'content': [
-                                    {
-                                        'type': 'text',
-                                        'text': self._get_vision_prompt()
-                                    },
-                                    {
-                                        'type': 'image_url',
-                                        'image_url': {
-                                            'url': f'data:image/png;base64,{base64_image}'
+                    response = self._call_openai_with_retry(
+                        lambda: self.client.chat.completions.create(
+                            model='gpt-4o',
+                            messages=[
+                                {
+                                    'role': 'user',
+                                    'content': [
+                                        {
+                                            'type': 'text',
+                                            'text': self._get_vision_prompt()
+                                        },
+                                        {
+                                            'type': 'image_url',
+                                            'image_url': {
+                                                'url': f'data:image/png;base64,{base64_image}'
+                                            }
                                         }
-                                    }
-                                ]
-                            }
-                        ],
-                        max_tokens=2000
+                                    ]
+                                }
+                            ],
+                            max_tokens=2000
+                        )
                     )
                     
                     logger.info("✅ Respuesta recibida de Vision API")
@@ -173,6 +181,18 @@ class OpenAIService:
             
             return extracted_data
             
+        except RateLimitError as e:
+            logger.error(f"❌ Rate limit excedido: {e}")
+            raise Exception("Límite de solicitudes excedido. Por favor, inténtelo más tarde.")
+        except APITimeoutError as e:
+            logger.error(f"❌ Timeout al procesar PDF: {e}")
+            raise Exception("Tiempo de espera agotado al procesar el archivo. Por favor, inténtelo nuevamente.")
+        except APIConnectionError as e:
+            logger.error(f"❌ Error de conexión con OpenAI: {e}")
+            raise Exception("Error de conexión con el servicio de procesamiento. Verifique su conexión a internet.")
+        except APIError as e:
+            logger.error(f"❌ Error de API de OpenAI: {e}")
+            raise Exception(f"Error al procesar el archivo: {str(e)}")
         except Exception as e:
             logger.error(f"❌ Error al procesar PDF: {e}")
             raise
@@ -186,26 +206,28 @@ class OpenAIService:
             base64_image = base64.b64encode(file_content).decode('utf-8')
             
             logger.info("📤 Enviando a Vision API...")
-            response = self.client.chat.completions.create(
-                model='gpt-4o',
-                messages=[
-                    {
-                        'role': 'user',
-                        'content': [
-                            {
-                                'type': 'text',
-                                'text': self._get_vision_prompt()
-                            },
-                            {
-                                'type': 'image_url',
-                                'image_url': {
-                                    'url': f'data:{mime_type};base64,{base64_image}'
+            response = self._call_openai_with_retry(
+                lambda: self.client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[
+                        {
+                            'role': 'user',
+                            'content': [
+                                {
+                                    'type': 'text',
+                                    'text': self._get_vision_prompt()
+                                },
+                                {
+                                    'type': 'image_url',
+                                    'image_url': {
+                                        'url': f'data:{mime_type};base64,{base64_image}'
+                                    }
                                 }
-                            }
-                        ]
-                    }
-                ],
-                max_tokens=2000
+                            ]
+                        }
+                    ],
+                    max_tokens=2000
+                )
             )
             
             logger.info("✅ Respuesta recibida de Vision API")
@@ -214,6 +236,18 @@ class OpenAIService:
             
             return extracted_data
             
+        except RateLimitError as e:
+            logger.error(f"❌ Rate limit excedido: {e}")
+            raise Exception("Límite de solicitudes excedido. Por favor, inténtelo más tarde.")
+        except APITimeoutError as e:
+            logger.error(f"❌ Timeout al procesar imagen: {e}")
+            raise Exception("Tiempo de espera agotado al procesar el archivo. Por favor, inténtelo nuevamente.")
+        except APIConnectionError as e:
+            logger.error(f"❌ Error de conexión con OpenAI: {e}")
+            raise Exception("Error de conexión con el servicio de procesamiento. Verifique su conexión a internet.")
+        except APIError as e:
+            logger.error(f"❌ Error de API de OpenAI: {e}")
+            raise Exception(f"Error al procesar el archivo: {str(e)}")
         except Exception as e:
             logger.error(f"❌ Error al procesar imagen: {e}")
             raise
@@ -301,3 +335,37 @@ Devuelve SOLO el JSON sin texto adicional."""
             logger.error(f"JSON candidato que falló:\n{json_string if 'json_string' in locals() else 'N/A'}")
             logger.error(f"Respuesta completa del asistente:\n{response_text}")
             raise ValueError(f'No se pudo parsear el JSON: {e}')
+    
+    def _call_openai_with_retry(self, func, max_retries=None):
+        """Ejecutar llamada a OpenAI con reintentos exponenciales"""
+        if max_retries is None:
+            max_retries = self.max_retries
+        
+        last_exception = None
+        
+        for attempt in range(max_retries):
+            try:
+                return func()
+            except RateLimitError as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    wait_time = self.retry_delay * (2 ** attempt)
+                    logger.warning(f"⚠️ Rate limit alcanzado. Reintentando en {wait_time}s... (intento {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                else:
+                    raise
+            except (APIConnectionError, APITimeoutError) as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    wait_time = self.retry_delay * (2 ** attempt)
+                    logger.warning(f"⚠️ Error de conexión. Reintentando en {wait_time}s... (intento {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                else:
+                    raise
+            except APIError as e:
+                # No reintentar errores de API que no son transitorios
+                logger.error(f"❌ Error de API (no reintentable): {e}")
+                raise
+        
+        # Si llegamos aquí, todos los reintentos fallaron
+        raise last_exception

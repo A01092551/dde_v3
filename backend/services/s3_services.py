@@ -39,11 +39,26 @@ class S3Service:
         if not self.client:
             raise ValueError("S3 no está configurado")
         
+        # Validaciones
+        if not file_content:
+            raise ValueError("Contenido del archivo está vacío")
+        
+        if not file_name or not file_name.strip():
+            raise ValueError("Nombre de archivo es requerido")
+        
+        # Validar tamaño (máximo 50MB)
+        MAX_FILE_SIZE = 50 * 1024 * 1024
+        if len(file_content) > MAX_FILE_SIZE:
+            raise ValueError(f"Archivo demasiado grande ({len(file_content) / 1024 / 1024:.2f}MB). Máximo: 50MB")
+        
+        # Sanitizar nombre de archivo
+        safe_file_name = file_name.replace('..', '').replace('/', '_').replace('\\', '_')
+        
         try:
             # Generar key único usando timestamp y nombre de archivo
             timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-            file_extension = os.path.splitext(file_name)[1]
-            s3_key = f"invoices/{timestamp}_{file_name}"
+            file_extension = os.path.splitext(safe_file_name)[1]
+            s3_key = f"invoices/{timestamp}_{safe_file_name}"
             
             # Subir a S3
             self.client.put_object(
@@ -68,8 +83,20 @@ class S3Service:
             }
             
         except ClientError as e:
-            logger.error(f"❌ Error al subir a S3: {e}")
-            raise Exception(f"Error al subir archivo a S3: {str(e)}")
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            logger.error(f"❌ Error al subir a S3 ({error_code}): {e}")
+            
+            if error_code == 'NoSuchBucket':
+                raise Exception(f"Bucket de S3 no existe: {self.bucket_name}")
+            elif error_code == 'AccessDenied':
+                raise Exception("Acceso denegado a S3. Verifique las credenciales y permisos.")
+            elif error_code == 'InvalidAccessKeyId':
+                raise Exception("Credenciales de AWS inválidas")
+            else:
+                raise Exception(f"Error al subir archivo a S3: {str(e)}")
+        except Exception as e:
+            logger.error(f"❌ Error inesperado al subir a S3: {e}")
+            raise
     
     def delete_file(self, s3_key: str) -> bool:
         """
@@ -93,7 +120,15 @@ class S3Service:
             return True
             
         except ClientError as e:
-            logger.error(f"❌ Error al eliminar de S3: {e}")
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            logger.error(f"❌ Error al eliminar de S3 ({error_code}): {e}")
+            
+            if error_code == 'NoSuchKey':
+                logger.warning(f"⚠️ Archivo no existe en S3: {s3_key}")
+                return True  # Consider it deleted if it doesn't exist
+            return False
+        except Exception as e:
+            logger.error(f"❌ Error inesperado al eliminar de S3: {e}")
             return False
     
     def generate_presigned_url(self, s3_key: str, expiration: int = 3600) -> str:
@@ -122,5 +157,15 @@ class S3Service:
             return url
             
         except ClientError as e:
-            logger.error(f"❌ Error al generar URL firmada: {e}")
-            raise Exception(f"Error al generar URL firmada: {str(e)}")
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            logger.error(f"❌ Error al generar URL firmada ({error_code}): {e}")
+            
+            if error_code == 'NoSuchKey':
+                raise Exception(f"Archivo no encontrado en S3: {s3_key}")
+            elif error_code == 'AccessDenied':
+                raise Exception("Acceso denegado para generar URL firmada")
+            else:
+                raise Exception(f"Error al generar URL firmada: {str(e)}")
+        except Exception as e:
+            logger.error(f"❌ Error inesperado al generar URL firmada: {e}")
+            raise

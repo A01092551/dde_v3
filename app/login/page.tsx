@@ -10,7 +10,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const router = useRouter();
+
+  // Validate email format
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +35,13 @@ export default function LoginPage() {
     if (!email || !password) {
       console.log('❌ [FRONTEND] Validation failed: Empty fields');
       setError('Please fill in all fields');
+      setLoading(false);
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      console.log('❌ [FRONTEND] Validation failed: Invalid email format');
+      setError('Please enter a valid email address');
       setLoading(false);
       return;
     }
@@ -150,11 +164,28 @@ export default function LoginPage() {
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (emailError) setEmailError('');
+                }}
+                onBlur={(e) => {
+                  if (e.target.value && !validateEmail(e.target.value)) {
+                    setEmailError('Please enter a valid email address');
+                  } else {
+                    setEmailError('');
+                  }
+                }}
+                className={`w-full px-4 py-3 rounded-lg border ${
+                  emailError
+                    ? 'border-red-500 focus:ring-red-500'
+                    : 'border-zinc-300 dark:border-zinc-600 focus:ring-blue-500'
+                } bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:ring-2 focus:border-transparent outline-none transition`}
                 placeholder="you@example.com"
                 disabled={loading}
               />
+              {emailError && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{emailError}</p>
+              )}
             </div>
 
             {/* Password */}

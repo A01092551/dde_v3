@@ -86,28 +86,67 @@ export default function ExtraccionPage() {
   };
 
   const handleFiles = (files: File[]) => {
-    const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
     const newInvoices: InvoiceItem[] = [];
+    const errors: string[] = [];
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    const validExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'];
 
     files.forEach(file => {
-      if (validTypes.includes(file.type)) {
-        newInvoices.push({
-          file,
-          previewUrl: URL.createObjectURL(file),
-          extractedData: null,
-          isProcessed: false,
-          isValidated: false,
-        });
+      // Validar nombre de archivo
+      if (!file.name || file.name.trim() === '') {
+        errors.push('Archivo sin nombre detectado');
+        return;
       }
+
+      // Validar tamaño de archivo
+      if (file.size === 0) {
+        errors.push(`${file.name}: Archivo vacío`);
+        return;
+      }
+
+      if (file.size > MAX_FILE_SIZE) {
+        errors.push(`${file.name}: Archivo demasiado grande (${(file.size / 1024 / 1024).toFixed(2)}MB). Máximo: 50MB`);
+        return;
+      }
+
+      // Validar tipo de archivo
+      if (!validTypes.includes(file.type)) {
+        errors.push(`${file.name}: Tipo de archivo no permitido (${file.type})`);
+        return;
+      }
+
+      // Validar extensión de archivo
+      const extension = '.' + file.name.toLowerCase().split('.').pop();
+      if (!validExtensions.includes(extension)) {
+        errors.push(`${file.name}: Extensión no permitida (${extension})`);
+        return;
+      }
+
+      // Archivo válido
+      newInvoices.push({
+        file,
+        previewUrl: URL.createObjectURL(file),
+        extractedData: null,
+        isProcessed: false,
+        isValidated: false,
+      });
     });
 
+    // Mostrar resultados
     if (newInvoices.length > 0) {
       setInvoices(prev => [...prev, ...newInvoices]);
       setError('');
       setSuccessMessage(`${newInvoices.length} factura(s) cargada(s)`);
       setTimeout(() => setSuccessMessage(''), 3000);
+    }
+
+    if (errors.length > 0) {
+      setError(`❌ Errores de validación:\n${errors.join('\n')}`);
+    } else if (newInvoices.length === 0) {
+      setError('Por favor, sube archivos PDF o imágenes válidas (PNG, JPG, WEBP)');
     } else {
-      setError('Por favor, sube archivos PDF o imágenes (PNG, JPG, WEBP)');
+      setError('');
     }
   };
 
@@ -155,7 +194,9 @@ export default function ExtraccionPage() {
         });
 
         if (!response.ok) {
-          throw new Error('Error al procesar la factura');
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.error || errorData.detail || 'Error al procesar la factura';
+          throw new Error(errorMessage);
         }
 
         const data = await response.json();
