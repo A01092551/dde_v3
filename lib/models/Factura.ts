@@ -223,7 +223,7 @@ const FacturaSchema = new mongoose.Schema({
     fileSize: { 
       type: Number,
       min: [0, 'Tamaño de archivo no puede ser negativo'],
-      max: [52428800, 'Tamaño de archivo no puede exceder 50MB'] // 50MB in bytes
+      max: [1048576, 'Tamaño de archivo no puede exceder 1MB'] // 1MB in bytes
     },
     processedAt: { 
       type: Date, 

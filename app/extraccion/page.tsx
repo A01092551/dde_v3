@@ -88,7 +88,7 @@ export default function ExtraccionPage() {
   const handleFiles = (files: File[]) => {
     const newInvoices: InvoiceItem[] = [];
     const errors: string[] = [];
-    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
     const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
     const validExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'];
 
@@ -106,7 +106,7 @@ export default function ExtraccionPage() {
       }
 
       if (file.size > MAX_FILE_SIZE) {
-        errors.push(`${file.name}: Archivo demasiado grande (${(file.size / 1024 / 1024).toFixed(2)}MB). Máximo: 50MB`);
+        errors.push(`${file.name}: Archivo demasiado grande (${(file.size / 1024 / 1024).toFixed(2)}MB). Máximo permitido: 1MB`);
         return;
       }
 
@@ -707,6 +707,34 @@ export default function ExtraccionPage() {
                   <p className="text-blue-500 dark:text-blue-500 text-xs text-center mt-2">
                     Esto puede tomar unos segundos
                   </p>
+                </div>
+              </div>
+            )}
+
+            {/* Error Display */}
+            {currentInvoice?.error && !loading && (
+              <div className="flex flex-col items-center justify-center h-96">
+                <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-lg p-6 max-w-md">
+                  <svg className="w-16 h-16 text-red-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-red-600 dark:text-red-400 font-semibold text-center mb-2">
+                    ❌ Error al procesar la factura
+                  </p>
+                  <p className="text-red-500 dark:text-red-400 text-sm text-center">
+                    {currentInvoice.error}
+                  </p>
+                  <button
+                    onClick={() => {
+                      // Limpiar el error y permitir reintentar
+                      setInvoices(prev => prev.map((inv, idx) => 
+                        idx === currentIndex ? { ...inv, error: undefined } : inv
+                      ));
+                    }}
+                    className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors mx-auto block"
+                  >
+                    Limpiar Error
+                  </button>
                 </div>
               </div>
             )}

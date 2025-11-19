@@ -56,12 +56,12 @@ async def extract_invoice(file: UploadFile = File(...)):
         file_size = len(file_content)
         logger.info(f"📄 Archivo leído: {file_size} bytes")
         
-        # Validar tamaño de archivo (máximo 50MB)
-        MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+        # Validar tamaño de archivo (máximo 1MB)
+        MAX_FILE_SIZE = 1 * 1024 * 1024  # 1MB
         if file_size > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"Archivo demasiado grande ({file_size / 1024 / 1024:.2f}MB). Máximo permitido: 50MB"
+                detail=f"Archivo demasiado grande ({file_size / 1024 / 1024:.2f}MB). Máximo permitido: 1MB"
             )
         
         # Validar que el archivo no esté vacío

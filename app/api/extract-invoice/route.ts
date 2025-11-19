@@ -38,6 +38,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validar tamaño del archivo (máximo 1MB)
+    const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB en bytes
+    if (file.size > MAX_FILE_SIZE) {
+      const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
+      console.error(`❌ Archivo demasiado grande: ${fileSizeMB}MB`);
+      return NextResponse.json(
+        { error: `El archivo es demasiado grande (${fileSizeMB}MB). El tamaño máximo permitido es 1MB.` },
+        { status: 413 }
+      );
+    }
+
     const isPdf = file.type === 'application/pdf';
     const isImage = file.type.startsWith('image/');
 
