@@ -130,18 +130,11 @@ class InvoiceService:
                 "metadata.s3Key": {"$exists": True, "$ne": None}
             })
             
-            # Facturas por usuario (top 5)
-            pipeline = [
-                {"$match": {"metadata.validatedBy": {"$exists": True, "$ne": None}}},
-                {"$group": {
-                    "_id": "$metadata.validatedBy",
-                    "count": {"$sum": 1}
-                }},
-                {"$sort": {"count": -1}},
-                {"$limit": 5}
-            ]
-            users_cursor = self.collection.aggregate(pipeline)
-            users_stats = await users_cursor.to_list(length=5)
+            # Facturas por validar (tienen processedAt pero NO tienen validatedAt)
+            pending_validation = await self.collection.count_documents({
+                "metadata.processedAt": {"$exists": True, "$ne": None},
+                "metadata.validatedAt": {"$exists": False}
+            })
             
             # Facturas por mes (últimos 6 meses)
             pipeline_monthly = [
@@ -188,7 +181,7 @@ class InvoiceService:
                 "validated": validated,
                 "modified": modified,
                 "with_s3": with_s3,
-                "by_user": users_stats,
+                "pending_validation": pending_validation,
                 "by_month": monthly_stats,
                 "history": history_formatted
             }
