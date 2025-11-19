@@ -27,36 +27,16 @@ class Item(BaseModel):
 
 class Proveedor(BaseModel):
     nombre: Optional[str] = Field(None, max_length=255)
-    rfc: Optional[str] = Field(None, max_length=13)
+    rfc: Optional[str] = Field(None, max_length=50)  # Increased max length to allow flexible formats
     nit: Optional[str] = Field(None, max_length=50)
     direccion: Optional[str] = Field(None, max_length=500)
     telefono: Optional[str] = Field(None, max_length=20)
-    
-    @field_validator('rfc')
-    @classmethod
-    def validate_rfc(cls, v):
-        if v is not None and v.strip():
-            v = v.strip().upper()
-            # RFC format: 3-4 letters + 6 digits + 3 alphanumeric
-            if not re.match(r'^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$', v):
-                raise ValueError('RFC inválido')
-        return v.upper() if v else v
 
 class Cliente(BaseModel):
     nombre: Optional[str] = Field(None, max_length=255)
-    rfc: Optional[str] = Field(None, max_length=13)
+    rfc: Optional[str] = Field(None, max_length=50)  # Increased max length to allow flexible formats
     nit: Optional[str] = Field(None, max_length=50)
     direccion: Optional[str] = Field(None, max_length=500)
-    
-    @field_validator('rfc')
-    @classmethod
-    def validate_rfc(cls, v):
-        if v is not None and v.strip():
-            v = v.strip().upper()
-            # RFC format: 3-4 letters + 6 digits + 3 alphanumeric
-            if not re.match(r'^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$', v):
-                raise ValueError('RFC inválido')
-        return v.upper() if v else v
 
 class Metadata(BaseModel):
     fileName: str = Field(..., max_length=255, min_length=1)

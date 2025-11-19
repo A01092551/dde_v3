@@ -136,12 +136,12 @@ async def validate_invoice(
         # Validar tamaño del archivo
         file_content = await file.read()
         file_size = len(file_content)
-        MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+        MAX_FILE_SIZE = 1 * 1024 * 1024  # 1MB
         
         if file_size > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"Archivo demasiado grande ({file_size / 1024 / 1024:.2f}MB). Máximo: 50MB"
+                detail=f"Archivo demasiado grande ({file_size / 1024 / 1024:.2f}MB). Máximo permitido: 1MB"
             )
         
         if file_size == 0:

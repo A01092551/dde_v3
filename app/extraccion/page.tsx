@@ -316,10 +316,13 @@ export default function ExtraccionPage() {
       // Determinar si la factura fue modificada
       const wasModified = isEditing || editedData !== null;
       
+      // Usar datos editados si existen, sino usar los extraídos
+      const dataToSend = editedData || currentInvoice.extractedData;
+      
       // Crear FormData para enviar archivo + datos
       const formData = new FormData();
       formData.append('file', currentInvoice.file);
-      formData.append('invoice_data', JSON.stringify(currentInvoice.extractedData));
+      formData.append('invoice_data', JSON.stringify(dataToSend));
       formData.append('validatedBy', userEmail);
       formData.append('wasModified', wasModified.toString());
       
@@ -336,7 +339,9 @@ export default function ExtraccionPage() {
         if (response.status === 409) {
           throw new Error('Esta factura ya ha sido validada anteriormente');
         }
-        throw new Error(data.error || 'Error al validar la factura');
+        // Mostrar mensaje de error más descriptivo
+        const errorMsg = data.detail || data.error || 'Error al validar la factura';
+        throw new Error(errorMsg);
       }
       
       // Marcar como validada
