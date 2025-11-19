@@ -15,15 +15,6 @@ class Item(BaseModel):
         if v is not None and (not isinstance(v, (int, float)) or v < 0):
             raise ValueError('Debe ser un número positivo')
         return v
-    
-    @model_validator(mode='after')
-    def validate_item_total(self):
-        """Validate that total = cantidad * precioUnitario"""
-        if self.cantidad is not None and self.precioUnitario is not None and self.total is not None:
-            calculated = self.cantidad * self.precioUnitario
-            if abs(self.total - calculated) > 0.01:
-                raise ValueError(f'Total del item ({self.total}) no coincide con cantidad × precio ({calculated:.2f})')
-        return self
 
 class Proveedor(BaseModel):
     nombre: Optional[str] = Field(None, max_length=255)
